@@ -1,0 +1,73 @@
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+
+venv.bak/
+
+# Archivos de entorno
+.env
+.env.*
+db.sqlite3
+
+# Archivos compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Archivos temporales y logs
+*.log
+*.swp
+*.swo
+logs/
+
+# Caché de pruebas y cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+.cache
+
+# Archivos del sistema y del editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Migraciones (opcional, solo si quieres ignorarlas antes de generar las reales)
+# core/migrations/
+# Si decides ignorar las migraciones, asegúrate de eliminar el archivo __init__.py del .gitignore
+
+# Archivos generados por bots o consultas si son temporales
+resultados/
+media/
+
+# Playwright y perfiles temporales
+playwright_debug_*/
+playwright_user_data/
+storage_state/
+tmp_browser_profiles/
+tmp_solver_profiles/
+
+# Llaves privadas y públicas
+privatekey
+publickey
+
+# Resultados de pruebas y archivos CSV
+*.csv
+*.xml
+out.html
+
+# Archivos de salida de scripts
+*.out
+
+# Procfile (si no lo usas en producción)
+Procfile
+
+# Archivos de paquetes instalados y dependencias
+
+
