@@ -202,9 +202,10 @@ async def consultar_colpensiones_rpm(consulta_id: int, cedula: str, tipo_doc: st
     async with async_playwright() as pw:
         for intento in range(1, MAX_RETRIES + 1):
             logger.info(f"Intento {intento}/{MAX_RETRIES} para consultar Colpensiones")
+            
             # Configurar navegador con argumentos anti-detección
             browser = await pw.chromium.launch(
-                headless=False,
+                headless=True,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--disable-dev-shm-usage",
@@ -215,7 +216,6 @@ async def consultar_colpensiones_rpm(consulta_id: int, cedula: str, tipo_doc: st
                     "--disable-infobars",
                     "--window-size=1920,1080",
                     "--start-maximized",
-                    "--window-position=2000,0"
                 ]
             )
             

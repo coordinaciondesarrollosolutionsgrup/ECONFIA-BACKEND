@@ -76,6 +76,8 @@ async def consultar_procuraduria(consulta_id, cedula, tipo_doc):
         ok_png_rel = os.path.join(relative_folder, f'{base_name}.png')
         err_png_abs = os.path.join(absolute_folder, f'{base_name}_error.png')
         err_png_rel = os.path.join(relative_folder, f'{base_name}_error.png')
+        pdf_abs = os.path.join(absolute_folder, f'{base_name}.pdf')
+        pdf_rel = os.path.join(relative_folder, f'{base_name}.pdf')
 
         # ---------- validaciones previas ----------
         tipo_doc_val = TIPO_DOC_MAP.get((tipo_doc or "").upper())
@@ -86,7 +88,7 @@ async def consultar_procuraduria(consulta_id, cedula, tipo_doc):
 
         # ---------- navegación ----------
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False, args=["window-position=2000,0"])
+            browser = await p.chromium.launch(headless=False)
             context = await browser.new_context()
             page = await context.new_page()
 
@@ -161,11 +163,11 @@ async def consultar_procuraduria(consulta_id, cedula, tipo_doc):
                         const txt = (el.innerText || '').trim();
                         if (txt.length > 0) return true;
                         return !!el.querySelector(
-                            '.alert, .card, .table, #divRespuesta, #divDescarga, #spnResultado, #lblCertificado, #lblContenido'
+                            '.alert, .card, .table, #divRespuesta, #divDescarga, #spnResultado, #lblCertificado, #lblContenido, a[href*=".pdf"]'
                         );
                     }
                     """,
-                    timeout=25000
+                    timeout=35000
                 )
             except Exception:
                 pass  # seguimos con fallbacks
@@ -202,38 +204,52 @@ async def consultar_procuraduria(consulta_id, cedula, tipo_doc):
             elif "antecedente" in low:
                 score = 0 
 
-            # 6) Evidencia: #divSec -> iframe -> página (FULL PAGE)
-            saved = False
+            # 6) Esperar redirección a la página de descarga y descargar el PDF
+            pdf_downloaded = False
             try:
-                # Pantallazo de TODA la página contenedora (como tu 2ª imagen)
+                # Esperar a que la URL cambie a la de generación de antecedentes
+                await page.wait_for_url(re.compile(r"Generacion-de-antecedentes\.aspx"), timeout=30000)
+                # Esperar el botón de descarga
+                await page.wait_for_selector('input[type="submit"][value*="Descargar"]', timeout=20000)
+                # Tomar screenshot de la página de descarga como evidencia principal
                 await fullpage_screenshot(page, ok_png_abs)
                 evidencia_rel = ok_png_rel
-                saved = True
+                # Descargar el PDF usando Playwright
+                async with page.expect_download() as download_info:
+                    await page.click('input[type="submit"][value*="Descargar"]')
+                download = await download_info.value
+                await download.save_as(pdf_abs)
+                pdf_downloaded = True
             except Exception:
-                saved = False
+                pdf_downloaded = False
 
-            if not saved:
+            # 7) Evidencia: si no hay PDF, guardar screenshot
+            if not pdf_downloaded:
+                saved = False
                 try:
-                    # Fallback: capturar iframe completo (estirándolo a su scrollHeight)
-                    iframe_el = await frame.frame_element()
-                    content_h = await frame.evaluate(
-                        "() => document.body.scrollHeight || document.documentElement.scrollHeight || 1200"
-                    )
-                    await iframe_el.evaluate(
-                        "(el, h) => { el.style.height = h + 'px'; el.style.maxHeight = h + 'px'; }",
-                        content_h
-                    )
-                    await iframe_el.screenshot(path=ok_png_abs)
+                    await fullpage_screenshot(page, ok_png_abs)
                     evidencia_rel = ok_png_rel
                     saved = True
                 except Exception:
                     saved = False
-
-            if not saved:
-                # Último recurso: tu captura anterior
-                await page.screenshot(path=ok_png_abs, full_page=True)
-                evidencia_rel = ok_png_rel
-
+                if not saved:
+                    try:
+                        iframe_el = await frame.frame_element()
+                        content_h = await frame.evaluate(
+                            "() => document.body.scrollHeight || document.documentElement.scrollHeight || 1200"
+                        )
+                        await iframe_el.evaluate(
+                            "(el, h) => { el.style.height = h + 'px'; el.style.maxHeight = h + 'px'; }",
+                            content_h
+                        )
+                        await iframe_el.screenshot(path=ok_png_abs)
+                        evidencia_rel = ok_png_rel
+                        saved = True
+                    except Exception:
+                        saved = False
+                if not saved:
+                    await page.screenshot(path=ok_png_abs, full_page=True)
+                    evidencia_rel = ok_png_rel
 
             # Guardar en BD
             await sync_to_async(Resultado.objects.create)(

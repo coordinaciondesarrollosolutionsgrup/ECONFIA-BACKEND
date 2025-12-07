@@ -19,4 +19,11 @@ def registrar_fuentes_si_faltan(lista_nombres_fuentes, tipo_nombre_default="Gene
             if creada:
                 print(f"Fuente creada: {nombre}")
             else:
+
                 print(f"Fuente ya existe: {nombre}")
+
+
+# Función requerida por django-extensions
+def run():
+    from core.scripts.fuentes_bots import FUENTES_BOTS
+    registrar_fuentes_si_faltan(FUENTES_BOTS)

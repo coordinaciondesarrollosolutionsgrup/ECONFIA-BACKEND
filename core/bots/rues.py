@@ -18,9 +18,7 @@ async def consultar_rues(cedula, consulta_id):
     os.makedirs(absolute_folder, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    screenshots_paths = []
     hallazgos_count = 0
-    mensaje_acumulado = ""
 
     fuente_obj = await sync_to_async(Fuente.objects.filter(nombre=nombre_sitio).first)()
 
@@ -38,7 +36,6 @@ async def consultar_rues(cedula, consulta_id):
                 for opcion in opciones[:-1]:  # excluye la última
                     await select.select_option(label=opcion)
                     await pagina.wait_for_timeout(500)
-                    
                     btn_buscar = pagina.locator("button.btn-busqueda:visible")
                     await btn_buscar.scroll_into_view_if_needed()
                     await btn_buscar.click()
@@ -50,60 +47,31 @@ async def consultar_rues(cedula, consulta_id):
                     ).count()
 
                     if no_result:
-                        mensaje_acumulado += f"No se encontraron hallazgos en {opcion}. "
+                        mensaje = f"No se encontraron hallazgos en {opcion}."
+                        score = 0
                     else:
-                        mensaje_acumulado += f"Se encontraron hallazgos en {opcion}. "
+                        mensaje = f"Se encontraron hallazgos en {opcion}."
                         hallazgos_count += 1
+                        score = 10
 
                     # Tomar pantallazo individual
                     temp_name = f"{nombre_sitio}_{cedula}_{opcion}_{timestamp}.png"
                     temp_path = os.path.join(absolute_folder, temp_name)
                     await pagina.screenshot(path=temp_path)
-                    screenshots_paths.append(temp_path)
+                    relative_path = os.path.join(relative_folder, temp_name)
 
-                # Combinar pantallazos en una sola imagen
-                images = [Image.open(p) for p in screenshots_paths]
-                widths, heights = zip(*(i.size for i in images))
-                col_count = 3
-                max_width = max(widths)
-                total_rows = (len(images) + col_count - 1) // col_count
-                max_height = max(heights)
-                combined_img = Image.new(
-                    "RGB", (max_width * col_count, max_height * total_rows), (255, 255, 255)
-                )
-                for idx, img in enumerate(images):
-                    row = idx // col_count
-                    col = idx % col_count
-                    combined_img.paste(img, (col * max_width, row * max_height))
-
-                screenshot_name = f"{nombre_sitio}_{cedula}_{timestamp}_combined.png"
-                absolute_path = os.path.join(absolute_folder, screenshot_name)
-                relative_path = os.path.join(relative_folder, screenshot_name)
-                combined_img.save(absolute_path)
+                    # Guardar cada resultado individualmente
+                    if fuente_obj:
+                        await sync_to_async(Resultado.objects.create)(
+                            consulta_id=consulta_id,
+                            fuente=fuente_obj,
+                            score=score,
+                            estado="Validado",
+                            mensaje=mensaje,
+                            archivo=relative_path
+                        )
 
                 await navegador.close()
-
-                # Calcular score
-                total_opts = len(opciones) - 1  # porque excluimos la última
-                if hallazgos_count == total_opts:
-                    score = 10
-                elif hallazgos_count >= total_opts * 0.6:
-                    score = 6
-                elif hallazgos_count >= total_opts * 0.3:
-                    score = 2
-                else:
-                    score = 0
-
-                # Guardar en la base de datos
-                if fuente_obj:
-                    await sync_to_async(Resultado.objects.create)(
-                        consulta_id=consulta_id,
-                        fuente=fuente_obj,
-                        score=score,
-                        estado="Validado",
-                        mensaje=mensaje_acumulado.strip(),
-                        archivo=relative_path
-                    )
                 break  # si tuvo éxito, salimos del bucle de intentos
 
         except Exception as e:
