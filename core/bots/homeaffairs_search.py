@@ -46,6 +46,18 @@ def _is_blocked_html(html: str) -> bool:
     if not html:
         return False
     lower = html.lower()
+    # Detectar variantes de 'No results' usando regex y frases comunes
+    no_results_patterns = [
+        r"no\s+results",
+        r"unfortunately\s+there\s+were\s+no\s+results",
+        r"no\s+hay\s+resultados",  # español
+        r"sin\s+resultados",        # español
+        r"aucun\s+r\u00e9sultat",  # francés
+        r"keine\s+ergebnisse",      # alemán
+    ]
+    for pat in no_results_patterns:
+        if re.search(pat, lower, re.IGNORECASE):
+            return False
     for ind in BLOCK_INDICATORS:
         if ind in lower:
             return True
@@ -80,14 +92,22 @@ async def _save_debug_artifacts(page, absolute_folder, prefix):
     """Guarda HTML y screenshot con prefijo y timestamp; devuelve rutas."""
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     png_path = os.path.join(absolute_folder, f"{prefix}_{ts}.png")
-    # Solo guardar la captura PNG, no el HTML
+    html_path = os.path.join(absolute_folder, f"{prefix}_{ts}.html")
     try:
         await page.screenshot(path=png_path, full_page=True)
         print(f"[RGM] DEBUG: Screenshot guardado en: {png_path}")
     except Exception as e:
         print(f"[RGM][WARN] No se pudo guardar screenshot debug: {e}")
         png_path = ""
-    return None, png_path
+    try:
+        html_content = await page.content()
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        print(f"[RGM] DEBUG: HTML guardado en: {html_path}")
+    except Exception as e:
+        print(f"[RGM][WARN] No se pudo guardar HTML debug: {e}")
+        html_path = ""
+    return html_path, png_path
 
 async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: str, headless=False):
     """
@@ -100,7 +120,7 @@ async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: 
     """
     navegador = None
     full_name = f"{(nombre or '').strip()} {(apellido or '').strip()}".strip()
-    print(f"[RGM] Iniciando consulta HomeAffairs: consulta_id={consulta_id} nombre='{full_name}' headless=True")
+    print(f"[RGM] Iniciando consulta HomeAffairs: consulta_id={consulta_id} nombre='{full_name}' headless={headless}")
 
     # 1) Fuente
     try:
@@ -134,8 +154,11 @@ async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_name = re.sub(r"[^\w\.-]+", "_", full_name)
     png_name = f"{NOMBRE_SITIO}_{safe_name}_{ts}.png"
+    html_name = f"{NOMBRE_SITIO}_{safe_name}_{ts}.html"
     absolute_png = os.path.join(absolute_folder, png_name)
+    absolute_html = os.path.join(absolute_folder, html_name)
     relative_png = os.path.join(relative_folder, png_name).replace("\\", "/")
+    relative_html = os.path.join(relative_folder, html_name).replace("\\", "/")
 
     mensaje_final = "No hay coincidencias."
     score_final = 1  # por defecto 1 (sólo sube a 5 si hay match exacto)
@@ -194,7 +217,7 @@ async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: 
                 "--window-size=1400,900",
                 "--window-position=-2000,0"  # mueve la ventana fuera de la pantalla
             ]
-            launch_kwargs = {"headless": False, "args": launch_args}
+            launch_kwargs = {"headless": headless, "args": launch_args}
             if proxy_to_use:
                 launch_kwargs["proxy"] = {"server": proxy_to_use}
             navegador = await p.chromium.launch(**launch_kwargs)
@@ -297,6 +320,7 @@ async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: 
                     print(f"[RGM][WARN] No se pudieron leer headers/estado: {e}")
             await _wait_for_networkidle_with_retries(page, retries=3, base_delay=1.0, timeout=45000)
             html_path, png_path = await _save_debug_artifacts(page, absolute_folder, "after_goto_headless")
+            print(f"[RGM] Guardados artefactos: HTML={html_path}, PNG={png_path}")
             blocked = False
             if resp_status == 403:
                 print("[RGM][WARN] La respuesta fue 403 (Access Denied).")
@@ -312,9 +336,13 @@ async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: 
             # Si está bloqueado, guardar la captura PNG si existe
             if blocked:
                 archivo_para_bd = ""
-                if os.path.exists(absolute_png) and os.path.getsize(absolute_png) > 0:
-                    archivo_para_bd = relative_png
-                mensaje_final = "Bloqueo detectado. Se adjunta captura para diagnóstico."
+                evidencia = []
+                if os.path.exists(html_path) and os.path.getsize(html_path) > 0:
+                    evidencia.append(relative_html)
+                if os.path.exists(png_path) and os.path.getsize(png_path) > 0:
+                    evidencia.append(relative_png)
+                archivo_para_bd = ",".join(evidencia)
+                mensaje_final = "Bloqueo detectado. Se adjunta evidencia (HTML/PNG) para diagnóstico."
                 last_error = mensaje_final
                 await sync_to_async(Resultado.objects.create)(
                     consulta_id=consulta_id, fuente=fuente_obj,
@@ -359,12 +387,19 @@ async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: 
                     if not _is_blocked_html(content_now):
                         try:
                             await page_for_parse.screenshot(path=absolute_png, full_page=True)
+                            with open(absolute_html, "w", encoding="utf-8") as f:
+                                f.write(content_now)
                         except Exception:
                             pass
                         success = True
+                        # Marcar como consulta válida aunque no haya coincidencias
+                        estado_bd = "Validada"
+                        mensaje_final = "Consulta realizada, sin coincidencias."
                     else:
                         # No guardar captura de bloqueo
                         success = True  # consideramos la consulta procesada, pero sin archivo adjunto
+                        estado_bd = "Validada"
+                        mensaje_final = "Consulta realizada, sin coincidencias. (Página sin resultados, pero no bloqueada)"
                 else:
                     # 5) Hay resultados -> iterar <ha-result-item>
                     items = page_for_parse.locator(SEL_RESULT_ITEM)
@@ -394,12 +429,19 @@ async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: 
                     # Antes de guardar captura, verificar que la página no sea una página de bloqueo
                     content_now = await page_for_parse.content()
                     if _is_blocked_html(content_now):
-                        # No guardar captura de bloqueo; marcar Sin Validar
-                        last_error = "La página resultante parece ser una página de bloqueo; no se adjunta captura."
+                        # Guardar HTML para diagnóstico
+                        try:
+                            with open(absolute_html, "w", encoding="utf-8") as f:
+                                f.write(content_now)
+                        except Exception:
+                            pass
+                        last_error = "La página resultante parece ser una página de bloqueo; se adjunta HTML para diagnóstico."
                         success = False
                     else:
                         try:
                             await page_for_parse.screenshot(path=absolute_png, full_page=True)
+                            with open(absolute_html, "w", encoding="utf-8") as f:
+                                f.write(content_now)
                         except Exception:
                             pass
                         if exact_hit:
@@ -432,14 +474,22 @@ async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: 
             es_bloqueo = False
 
         archivo_para_bd = ""
-        # Siempre adjuntar la evidencia si existe y tiene tamaño > 0
+        # Priorizar PNG como evidencia principal, si existe y tiene tamaño > 0
         if os.path.exists(absolute_png) and os.path.getsize(absolute_png) > 0:
             archivo_para_bd = relative_png
-        # Guardar resultado en BD, adjuntando evidencia aunque haya bloqueo
-        estado_bd = "Validada" if success and not es_bloqueo else "Sin Validar"
-        mensaje_bd = mensaje_final
-        if es_bloqueo:
-            mensaje_bd = "La página parece estar bloqueada o no muestra resultados. Se adjunta captura para diagnóstico. " + (mensaje_final or "Bloqueo detectado.")
+        elif os.path.exists(absolute_html) and os.path.getsize(absolute_html) > 0:
+            archivo_para_bd = relative_html
+        # Si existe evidencia y la consulta fue exitosa, marcar como 'Validada' y mensaje claro
+        if archivo_para_bd and success and not es_bloqueo:
+            estado_bd = "Validada"
+            mensaje_bd = "Consulta realizada correctamente. Se adjunta evidencia de la búsqueda. " + (mensaje_final or "Sin coincidencias.")
+        else:
+            # Si ya se definió estado_bd como 'Validada' en el flujo anterior, respetar ese valor
+            if 'estado_bd' not in locals():
+                estado_bd = "Validada" if success and not es_bloqueo else "Sin Validar"
+            mensaje_bd = mensaje_final
+            if es_bloqueo:
+                mensaje_bd = "La página parece estar bloqueada o no muestra resultados. Se adjunta evidencia (HTML/PNG) para diagnóstico. " + (mensaje_final or "Bloqueo detectado.")
         await sync_to_async(Resultado.objects.create)(
             consulta_id=consulta_id, fuente=fuente_obj,
             score=score_final if success and not es_bloqueo else 1,

@@ -149,9 +149,10 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
     # Fuente (resolver antes del loop, para usarla en errores finales)
     fuente_obj = await sync_to_async(lambda: Fuente.objects.filter(nombre=NOMBRE_SITIO).first())()
     if not fuente_obj:
+        print(f"[SIMIT] ERROR: No se encontró la fuente '{NOMBRE_SITIO}' en la base de datos.")
         await sync_to_async(Resultado.objects.create)(
             consulta_id=consulta_id, fuente=None, score=0,
-            estado="Sin validar", mensaje=f"No se encontró la fuente '{NOMBRE_SITIO}'", archivo=""
+            estado="Sin validar", mensaje=f"No se encontró la fuente '{NOMBRE_SITIO}' en la base de datos.", archivo=""
         )
         return
 
@@ -160,21 +161,13 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
     td_value = DOC_VALUE_BY_CODE.get(td, td if td.isdigit() else None)
     td_label = DOC_LABEL_BY_CODE.get(td, None)
 
-    import random
-    import asyncio
     max_intentos = 3
     last_error = None
-
-    acciones = [
-        "scroll",
-        "navegar",
-        "esperar",
-        "abrir_menu"
-    ]
 
     for intento in range(1, max_intentos + 1):
         browser = None
         page = None
+        print(f"[SIMIT] Intento {intento} de {max_intentos} para consulta {consulta_id} - {cedula}")
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
@@ -182,42 +175,19 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                 page = await context.new_page()
 
                 # 1) Abrir SIMIT
+                print(f"[SIMIT] Abriendo SIMIT: {SIMIT_URL}")
                 await page.goto(SIMIT_URL, timeout=120000, wait_until="domcontentloaded")
                 try:
                     await page.wait_for_load_state("networkidle", timeout=8000)
                 except Exception:
-                    pass
-
-                # Acción aleatoria para simular usuario
-                accion = random.choice(acciones)
-                if accion == "scroll":
-                    # Scroll aleatorio
-                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight * arguments[0]);", random.uniform(0.2, 1.0))
-                elif accion == "navegar":
-                    # Navegar a otra sección y volver
-                    try:
-                        await page.click("a:has-text('Contactenos')")
-                        await asyncio.sleep(random.uniform(1, 3))
-                        await page.goto(SIMIT_URL, timeout=120000, wait_until="domcontentloaded")
-                    except Exception:
-                        pass
-                elif accion == "esperar":
-                    # Espera aleatoria menor a 10 segundos
-                    await asyncio.sleep(random.uniform(1, 9))
-                elif accion == "abrir_menu":
-                    # Abrir/cerrar menú si existe
-                    try:
-                        await page.click("button.navbar-toggler")
-                        await asyncio.sleep(random.uniform(1, 3))
-                        await page.click("button.navbar-toggler")
-                    except Exception:
-                        pass
+                    print("[SIMIT] No se alcanzó networkidle tras abrir la página.")
 
                 # 2) Cerrar modal informativo si aparece
                 try:
                     await page.locator("button.modal-info-close").first.click(timeout=2000)
+                    print("[SIMIT] Cerrado modal informativo.")
                 except Exception:
-                    pass
+                    print("[SIMIT] No apareció modal informativo.")
 
                 # 3) Ingresar cédula y consultar
                 await page.wait_for_selector("#txtBusqueda", timeout=20000)
@@ -226,11 +196,12 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                 try:
                     await page.wait_for_load_state("networkidle", timeout=8000)
                 except Exception:
-                    pass
+                    print("[SIMIT] No se alcanzó networkidle tras consultar.")
 
                 # 4) Detectar resultado
                 cont_sin = page.locator("text=/no\\s+(posee|tienes?).*pendientes\\s+de\\s+pago/i").first
                 tiene_paz = await cont_sin.count() > 0
+                print(f"[SIMIT] ¿Tiene paz y salvo? {tiene_paz}")
 
                 # --- rutas base de evidencia ---
                 if tiene_paz:
@@ -249,9 +220,7 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                 rel_png_merged = os.path.join(relative_folder, f"{base}_merged.png").replace("\\", "/")
 
                 if tiene_paz:
-                    # -----------------------
-                    # 5A) PAZ Y SALVO
-                    # -----------------------
+                    print("[SIMIT] Caso paz y salvo: descargando certificado.")
                     try:
                         mensaje = (await cont_sin.inner_text()).strip()
                     except Exception:
@@ -273,7 +242,7 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                         elif td_label:
                             await page.select_option("#tipoDoc", label=td_label)
                     except Exception:
-                        pass
+                        print("[SIMIT] No se pudo seleccionar tipo de documento en el modal.")
 
                     # Botón 'Descargar' dentro del modal
                     try:
@@ -281,9 +250,9 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                             await page.locator("button.btn.btn-primary.btn-sm.btn-block:has-text('Descargar')").first.click()
                         d = await dl.value
                         await d.save_as(abs_pdf)
+                        print(f"[SIMIT] PDF paz y salvo descargado: {abs_pdf}")
                     except Exception:
-                        # si falla la descarga, seguimos con visor/screenshot abajo
-                        pass
+                        print("[SIMIT] Error al descargar paz y salvo PDF, se usará visor/screenshot.")
 
                     # Evidencia PNG (página 1 del PDF, o visor, fallback)
                     rendered = False
@@ -296,7 +265,7 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                             await _screenshot_pdf_embed(context, abs_pdf, abs_png)
                             rendered = os.path.exists(abs_png) and os.path.getsize(abs_png) > 0
                         except Exception:
-                            # último recurso: screenshot de la página actual
+                            print("[SIMIT] Error al generar PNG desde visor PDF, se usará screenshot de página.")
                             try:
                                 await page.screenshot(path=abs_png, full_page=True)
                                 rendered = True
@@ -307,14 +276,12 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                     final_rel_png = rel_png  # paz y salvo no necesita merge
 
                 else:
-                    # -----------------------
-                    # 5B) PENDIENTES
-                    # -----------------------
+                    print("[SIMIT] Caso pendientes: descargando estado y PDF.")
                     # (1) Screenshot de la página ANTES de abrir el modal
                     try:
                         await page.screenshot(path=abs_png_page, full_page=True)
                     except Exception:
-                        pass  # no interrumpe el flujo
+                        print("[SIMIT] Error al capturar screenshot de la página principal.")
 
                     # (2) Total
                     try:
@@ -336,6 +303,7 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                             await page.locator("a.btn.btn-outline-primary.btn-block.btn-sm:has-text('Descargar PDF')").first.click()
                         d = await dl.value
                         await d.save_as(abs_pdf)
+                        print(f"[SIMIT] PDF estado descargado: {abs_pdf}")
 
                         # Render PNG del PDF
                         rendered = _render_pdf_first_page_pymupdf(abs_pdf, abs_png, zoom=2.0)
@@ -346,6 +314,7 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                             rendered = os.path.exists(abs_png) and os.path.getsize(abs_png) > 0
 
                     except Exception:
+                        print("[SIMIT] Error al descargar PDF de pendientes, se usará visor/screenshot.")
                         # (5) Fallback: visor en nueva pestaña
                         try:
                             async with context.expect_event("page", timeout=10000) as newp:
@@ -357,10 +326,12 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                                 await emb.wait_for(state="visible", timeout=8000)
                                 await emb.screenshot(path=abs_png)
                             except Exception:
+                                print("[SIMIT] Error al capturar embed PDF, se usará screenshot de la pestaña.")
                                 await pdf_page.screenshot(path=abs_png, full_page=True)
                             rendered = os.path.exists(abs_png) and os.path.getsize(abs_png) > 0
                             await pdf_page.close()
                         except Exception:
+                            print("[SIMIT] Error en visor alternativo de PDF.")
                             rendered = False
 
                     score = 5
@@ -375,6 +346,7 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                             if merged_ok:
                                 final_rel_png = rel_png_merged
                     except Exception:
+                        print("[SIMIT] Error al unir evidencias PNG.")
                         merged_ok = False
 
                     # Si no se pudo mergear, usa la mejor evidencia disponible
@@ -387,6 +359,7 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                             final_rel_png = ""  # sin evidencia gráfica
 
                 # 6) Guardar resultado (PNG final como evidencia; el PDF queda en carpeta)
+                print(f"[SIMIT] Guardando resultado. Score: {score}, Mensaje: {mensaje}, Evidencia: {final_rel_png}")
                 await sync_to_async(Resultado.objects.create)(
                     consulta_id=consulta_id,
                     fuente=fuente_obj,
@@ -397,21 +370,24 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                 )
 
                 await browser.close()
+                print("[SIMIT] Proceso finalizado correctamente.")
                 return
 
         except Exception as e:
             last_error = e
+            print(f"[SIMIT] ERROR: {str(e)}")
             try:
                 if page is not None:
                     err_png = os.path.join(absolute_folder, f"simit_error_{cedula}_{ts}.png")
                     await page.screenshot(path=err_png, full_page=True)
+                    print(f"[SIMIT] Screenshot de error guardado: {err_png}")
             except Exception:
-                pass
+                print("[SIMIT] No se pudo guardar screenshot de error.")
             try:
                 if browser:
                     await browser.close()
             except Exception:
-                pass
+                print("[SIMIT] No se pudo cerrar el navegador tras error.")
 
     # 7) Error definitivo
     await sync_to_async(Resultado.objects.create)(

@@ -19,5 +19,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiamos el resto del código
 COPY ./ ./
 
-# Comando para correr el servidor
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Comando para producción con Gunicorn
+CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:8000"]
