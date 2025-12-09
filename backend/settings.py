@@ -119,6 +119,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
+# Configuración dinámica de la ruta de la base de datos SQLite
+import os
+if os.environ.get('DJANGO_ENV') == 'production':
+    DB_PATH = '/data/db.sqlite3'
+else:
+    DB_PATH = BASE_DIR / 'db.sqlite3'
+
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -126,7 +133,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DB_PATH,
     }
 }
 

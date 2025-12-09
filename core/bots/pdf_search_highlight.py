@@ -1,5 +1,6 @@
 # core/bots/pdf_search_highlight.py
 import os
+from typing import Optional
 import re
 import unicodedata
 from datetime import datetime
@@ -27,7 +28,7 @@ def _buscar_en_pdf_y_resaltar_core(
     dpi: int = 150,
     stop_on_first: bool = False,   # corta en la primera página con match
     page_limit: int | None = None  # limitar páginas para pruebas / performance
-):
+    page_limit: Optional[int] = None  # limitar páginas para pruebas / performance
     """
     IMPLEMENTACIÓN ORIGINAL (sin cambios de lógica):
     Busca 'query' en pdf_path de forma tolerante (sin acentos, case-insensitive y
@@ -131,7 +132,7 @@ def consultar_buscar_en_pdf_y_resaltar_dj(
     query: str,
     export_first_if_none: bool = True,
     dpi: int = 150,
-    stop_on_first: bool = False,
+    page_limit: Optional[int] = None,
     page_limit: int | None = None,
 ):
     """
@@ -151,7 +152,7 @@ def consultar_buscar_en_pdf_y_resaltar_dj(
             out_folder=absolute_folder,
             export_first_if_none=export_first_if_none,
             dpi=dpi,
-            stop_on_first=stop_on_first,
+            page_limit=page_limit,
             page_limit=page_limit,
         )
 
@@ -191,7 +192,7 @@ def consultar_buscar_en_pdf_y_resaltar(
     out_folder: str,
     export_first_if_none: bool = True,
     dpi: int = 150,
-    stop_on_first: bool = False,
+    page_limit: Optional[int] = None,
     page_limit: int | None = None,
 ):
     """
@@ -204,7 +205,7 @@ def consultar_buscar_en_pdf_y_resaltar(
         out_folder=out_folder,
         export_first_if_none=export_first_if_none,
         dpi=dpi,
-        stop_on_first=stop_on_first,
+        page_limit=page_limit,
         page_limit=page_limit,
     )
 
@@ -217,7 +218,7 @@ def buscar_en_pdf_y_resaltar_dj(
     cedula: str,
     pdf_path: str,
     query: str,
-    export_first_if_none: bool = True,
+    page_limit: Optional[int] = None,
     dpi: int = 150,
     stop_on_first: bool = False,
     page_limit: int | None = None,
@@ -227,7 +228,7 @@ def buscar_en_pdf_y_resaltar_dj(
         cedula=cedula,
         pdf_path=pdf_path,
         query=query,
-        export_first_if_none=export_first_if_none,
+        page_limit=page_limit,
         dpi=dpi,
         stop_on_first=stop_on_first,
         page_limit=page_limit,
@@ -238,7 +239,7 @@ def buscar_en_pdf_y_resaltar(
     pdf_path: str,
     query: str,
     out_folder: str,
-    export_first_if_none: bool = True,
+    page_limit: Optional[int] = None,
     dpi: int = 150,
     stop_on_first: bool = False,
     page_limit: int | None = None,
@@ -248,7 +249,7 @@ def buscar_en_pdf_y_resaltar(
         pdf_path=pdf_path,
         query=query,
         out_folder=out_folder,
-        export_first_if_none=export_first_if_none,
+        page_limit=page_limit,
         dpi=dpi,
         stop_on_first=stop_on_first,
         page_limit=page_limit,

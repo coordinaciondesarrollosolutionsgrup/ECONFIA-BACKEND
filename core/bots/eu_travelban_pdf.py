@@ -33,6 +33,7 @@ async def consultar_eu_travelban_pdf(consulta_id: int, nombre_completo: str):
       - Falla: score=10, estado="Sin Validar", mensaje="el pdf no pudo ser descargado", archivo=""
     """
     navegador = None
+    from typing import Optional
     context = None
 
     # 1) Fuente
