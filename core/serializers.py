@@ -48,11 +48,17 @@ class ConsultaSerializer(serializers.ModelSerializer):
 class ResultadoSerializer(serializers.ModelSerializer):
     fuente = serializers.CharField(source="fuente.nombre_pila", default=None)
     tipo_fuente = serializers.CharField(source="fuente.tipo.nombre", default=None)
+    archivo_urls = serializers.SerializerMethodField()
 
     class Meta:
         model = Resultado
         fields = ["id", "consulta_id", "fuente", "tipo_fuente", "estado", "score", "mensaje", "archivo"]
-
+    
+    def get_archivo_urls(self, obj):
+        request = self.context.get('request')
+        if obj.archivo and request:
+            return request.build_absolute_uri(obj.archivo.url)
+        return None
 
 class CandidatoSerializer(serializers.ModelSerializer):
     class Meta:
