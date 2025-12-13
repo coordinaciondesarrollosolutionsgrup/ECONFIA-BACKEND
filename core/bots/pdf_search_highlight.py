@@ -133,7 +133,6 @@ def consultar_buscar_en_pdf_y_resaltar_dj(
     export_first_if_none: bool = True,
     dpi: int = 150,
     page_limit: Optional[int] = None,
-    page_limit: Optional[int] = None,
 ):
     """
     Wrapper estilo plantilla (nombre con 'consultar'):
@@ -193,7 +192,6 @@ def consultar_buscar_en_pdf_y_resaltar(
     export_first_if_none: bool = True,
     dpi: int = 150,
     page_limit: Optional[int] = None,
-    page_limit: Optional[int] = None,
 ):
     """
     Versión “cruda” con nombre 'consultar*' para uso directo.
@@ -221,7 +219,6 @@ def buscar_en_pdf_y_resaltar_dj(
     page_limit: Optional[int] = None,
     dpi: int = 150,
     stop_on_first: bool = False,
-    page_limit: Optional[int] = None,
 ):
     """Alias legacy que llama al nuevo nombre con 'consultar'."""
     return consultar_buscar_en_pdf_y_resaltar_dj(
@@ -242,7 +239,6 @@ def buscar_en_pdf_y_resaltar(
     page_limit: Optional[int] = None,
     dpi: int = 150,
     stop_on_first: bool = False,
-    page_limit: Optional[int] = None,
 ):
     """Alias legacy que llama al nuevo nombre con 'consultar'."""
     return consultar_buscar_en_pdf_y_resaltar(
