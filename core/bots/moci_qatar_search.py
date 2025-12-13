@@ -113,7 +113,7 @@ async def consultar_moci_qatar_search(consulta_id: int, nombre: str, apellido: s
 
     try:
         async with async_playwright() as p:
-            navegador = await p.chromium.launch(headless=headless, args=["--disable-blink-features=AutomationControlled"])
+            navegador = await p.chromium.launch(headless=headless, args=["--no-sandbox", "--disable-blink-features=AutomationControlled", "--window-position=2000,0"])
             context = await navegador.new_context(
                 viewport={"width": 1400, "height": 900},
                 locale="en-US",
@@ -203,7 +203,23 @@ async def consultar_moci_qatar_search(consulta_id: int, nombre: str, apellido: s
                     except Exception:
                         pass
 
-                    navegador = await p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled", "--window-position=2000,0"])
+                    navegador = await p.chromium.launch(headless=True, 
+                                args=[                    
+                                    "--disable-blink-features=AutomationControlled",
+                                    "--disable-dev-shm-usage",
+                                    "--disable-infobars",
+                                    "--no-sandbox",
+                                    "--disable-web-security",
+                                    "--disable-features=IsolateOrigins,site-per-process",
+                                    "--disable-component-update",
+                                    "--disable-sync",
+                                    "--disable-extensions",
+                                    "--disable-default-apps",
+                                    "--disable-preconnect",
+                                    "--no-first-run",
+                                    "--no-default-browser-check",
+                                    "--window-size=1400,900",
+                                    "--window-position=2000,0",])
                     context = await navegador.new_context(viewport={"width": 1400, "height": 900}, locale="en-US", timezone_id="America/Bogota")
                     page = await context.new_page()
                     try:

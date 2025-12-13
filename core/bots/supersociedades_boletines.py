@@ -57,12 +57,20 @@ async def consultar_supersociedades_boletines(
 
             async with async_playwright() as p:
                 browser = await p.chromium.launch(
-                    headless=False,
+                    headless=True,
                         slow_mo=slow_ms,
                         args=[
-                            "--disable-blink-features=AutomationControlled",
-                            "--start-maximized",
-                            "--window-position=2000,0",
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-web-security",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                        "--disable-infobars",
+                        "--window-size=1920,1080",
+                        "--start-maximized",
+                        "--disable-site-isolation-trials",
+                        "--disable-features=VizDisplayCompositor",
                         ],
                     )
                 ctx = await browser.new_context(viewport=None, locale="es-CO")

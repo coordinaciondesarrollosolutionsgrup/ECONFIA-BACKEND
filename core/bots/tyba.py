@@ -202,7 +202,20 @@ async def consultar_tyba(consulta_id: int, tipo_doc: str, numero: str):
         tipo_doc_val = TIPO_DOC_MAP.get((tipo_doc or "").upper(), "1")
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
+            browser = await p.chromium.launch(headless=True, 
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-web-security",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                        "--disable-infobars",
+                        "--window-size=1920,1080",
+                        "--start-maximized",
+                        "--disable-site-isolation-trials",
+                        "--disable-features=VizDisplayCompositor",
+                    ])
             context = await browser.new_context(viewport={"width": 1366, "height": 900}, locale="es-CO")
             try:
                 await context.add_init_script("""

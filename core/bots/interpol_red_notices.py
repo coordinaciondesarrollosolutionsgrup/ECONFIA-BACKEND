@@ -85,7 +85,7 @@ async def consultar_interpol_red_notices(consulta_id: int, nombre: str, cedula: 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
-            args=["--disable-blink-features=AutomationControlled"]
+            args=["--no-sandbox", "--disable-blink-features=AutomationControlled", "--window-position=2000,0"]
         )
 
         context: BrowserContext = await browser.new_context(

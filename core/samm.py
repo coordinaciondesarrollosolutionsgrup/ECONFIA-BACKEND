@@ -15,9 +15,10 @@ def consultar_samm(nombre):
     """
     nombre = nombre.strip().replace(" ", "+")
     try:
+        
         with sync_playwright() as p:
-                        
-            navegador = p.chromium.launch(headless=False)
+            headless = os.getenv("HEADLESS", "true").lower() == "true"
+            navegador = p.chromium.launch(headless=headless)
             pagina = navegador.new_page()
             pagina.goto(url+nombre)
                         

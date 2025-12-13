@@ -179,8 +179,20 @@ async def consultar_ramajudicial_corte_constitucional_magistrados_anteriores(
 
             async with async_playwright() as p:
                 browser = await p.chromium.launch(
-                    headless=False,
-                    args=["--disable-blink-features=AutomationControlled", "--start-maximized"]
+                    headless=True,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-web-security",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                        "--disable-infobars",
+                        "--window-size=1920,1080",
+                        "--start-maximized",
+                        "--disable-site-isolation-trials",
+                        "--disable-features=VizDisplayCompositor",
+                    ]
                 )
                 ctx = await browser.new_context(
                     viewport={"width": 1680, "height": 1800},

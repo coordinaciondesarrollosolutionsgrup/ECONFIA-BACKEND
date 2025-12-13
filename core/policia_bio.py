@@ -22,10 +22,10 @@ OVERLAYS  = [".ui-widget-overlay", ".ui-blockui", ".blockUI", ".ui-overlay-visib
 
 # ====================== Helpers de parsing/score ======================
 
-def _extraer_frase_clave(html: str) -> str | None:
+from typing import Optional
+def _extraer_frase_clave(html: str) -> Optional[str]:
     """ Devuelve la <b>...</b> más útil (preferencia a 'TIENE'/'NO TIENE'). """
     if not html:
-        from typing import Optional
         return None
     bolds = re.findall(r"<b>(.*?)</b>", html, flags=re.IGNORECASE | re.DOTALL)
     if not bolds:
@@ -39,7 +39,7 @@ def _score_y_msg(texto: str) -> tuple[int, str]:
     if "no tiene asuntos pendientes" in t:
         return 0, "NO TIENE ASUNTOS PENDIENTES"
     if "tiene asuntos pendientes" in t:
-        def _extraer_frase_clave(html: str) -> Optional[str]:
+        return 10, "TIENE ASUNTOS PENDIENTES"
     return 2, "Resultado obtenido (revisar captura)."
 
 EXTRA_RENDER_SLEEP_MS = 2500   # ⬅️ tiempo extra antes de devolver el HTML
