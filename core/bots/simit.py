@@ -170,7 +170,20 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
         print(f"[SIMIT] Intento {intento} de {max_intentos} para consulta {consulta_id} - {cedula}")
         try:
             async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
+                browser = await p.chromium.launch(headless=True,
+                args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-web-security",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                        "--disable-infobars",
+                        "--window-size=1920,1080",
+                        "--start-maximized",
+                        "--disable-site-isolation-trials",
+                        "--disable-features=VizDisplayCompositor",
+                ])
                 context = await browser.new_context(accept_downloads=True, viewport={"width": 1440, "height": 960})
                 page = await context.new_page()
 

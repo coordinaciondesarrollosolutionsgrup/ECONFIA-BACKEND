@@ -60,7 +60,13 @@ async def consultar_eris(consulta_id: int, cedula: str, tipo_doc: str):
         tipo_doc_val = TIPO_DOC_MAP.get((tipo_doc or "").upper())
 
         async with async_playwright() as p:
-            navegador = await p.chromium.launch(headless=True)
+            navegador = await p.chromium.launch(headless=True,
+                                                args=[        
+                    "--no-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--window-position=2000,0"]
+            )
 
             context_kwargs = {}
             if STORAGE_FILE.exists():

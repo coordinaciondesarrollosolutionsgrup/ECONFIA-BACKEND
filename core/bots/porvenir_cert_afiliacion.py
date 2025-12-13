@@ -102,7 +102,7 @@ async def consultar_porvenir_cert_afiliacion(consulta_id: int, cedula: str, tipo
             # Modo "offscreen": ventana real pero fuera de la pantalla
             print("[PORVENIR] Lanzando navegador (offscreen, anti-detección avanzada)...")
             browser = await p.chromium.launch(
-                headless=False,  # importante: no headless para evitar bloqueos
+                headless=True,  # importante: no headless para evitar bloqueos
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--disable-dev-shm-usage",

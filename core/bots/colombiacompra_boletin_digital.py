@@ -50,8 +50,12 @@ async def consultar_colombiacompra_boletin_digital(consulta_id: int, nombre: str
         # 3) Navegación + interacción
         async with async_playwright() as p:
             browser = await p.chromium.launch(
-                headless=False,
-                args=["--disable-blink-features=AutomationControlled", "--window-position=2000,0"],
+                headless=True,
+                args=[        
+                    "--no-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--window-position=2000,0"]
             )
             ctx = await browser.new_context(viewport={"width": 1440, "height": 1000}, locale="es-CO")
             page = await ctx.new_page()

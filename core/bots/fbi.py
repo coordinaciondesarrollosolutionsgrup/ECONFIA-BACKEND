@@ -71,7 +71,13 @@ async def consultar_fbi(consulta_id: int, nombre: str):
 
     try:
         async with async_playwright() as p:
-            navegador = await p.chromium.launch(headless=True)
+            navegador = await p.chromium.launch(headless=True, 
+                                                args=[        
+                    "--no-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--window-position=2000,0"]
+            )
             context = await navegador.new_context(
                 viewport={"width": 1440, "height": 900},
                 locale="en-US",

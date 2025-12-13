@@ -83,7 +83,7 @@ async def _human_move_mouse(page, width=1366, height=768):
 async def consultar_dea(
     consulta_id: int,
     cedula: str,
-    headless: bool = False,
+    headless: bool = True,
     max_intentos: int = 3,
     proxies: Optional[List[str]] = None,
     user_agents: Optional[List[str]] = None,

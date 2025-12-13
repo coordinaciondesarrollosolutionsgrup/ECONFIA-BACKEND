@@ -235,8 +235,12 @@ async def consultar_colombiacompra_procesos(
         async with async_playwright() as p:
             _dbg(consulta_id, "Lanzando Chromium headless…")
             browser = await p.chromium.launch(
-                headless=False,
-                args=["--disable-blink-features=AutomationControlled", "--window-position=2000,0"]
+                headless=True,
+                args=[        
+                    "--no-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--window-position=2000,0"]
             )
             _dbg(consulta_id, "Creando contexto…")
             context = await browser.new_context(

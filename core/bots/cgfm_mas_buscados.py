@@ -208,8 +208,12 @@ async def consultar_cgfm_mas_buscados(
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(
-                headless=False,  # estable y rápido
-                args=["--disable-dev-shm-usage", "--window-position=2000,0"]
+                headless=True,  # estable y rápido
+                args=[        
+                    "--no-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--window-position=2000,0"]
             )
             ctx = await browser.new_context(
                 viewport={"width": 1366, "height": 1400},

@@ -109,7 +109,7 @@ async def _save_debug_artifacts(page, absolute_folder, prefix):
         html_path = ""
     return html_path, png_path
 
-async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: str, headless=False):
+async def consultar_homeaffairs_search(consulta_id: int, nombre: str, apellido: str, headless=True):
     """
     Flujo robusto para consultar homeaffairs.gov.au:
     - Intenta URL directa en modo headless (por defecto).

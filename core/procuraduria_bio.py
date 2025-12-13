@@ -50,7 +50,9 @@ async def procuraduria_bio(cedula, tipo_doc):
                 return resultado_json  
 
             async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=False)  # pon False para debug
+                import os
+                headless = os.getenv("HEADLESS", "true").lower() == "true"
+                browser = await p.chromium.launch(headless=headless)  # pon False para debug
                 context = await browser.new_context()
                 page = await context.new_page()
 

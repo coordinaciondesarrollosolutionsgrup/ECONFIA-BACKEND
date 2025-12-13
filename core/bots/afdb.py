@@ -288,7 +288,6 @@ async def consultar_afdb(consulta_id: int, nombre: str, apellido: str, debug: bo
     browser = None
     try:
         async with async_playwright() as p:
-            # user agent y headers más "humano"
             USER_AGENTS = [
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -297,14 +296,12 @@ async def consultar_afdb(consulta_id: int, nombre: str, apellido: str, debug: bo
             storage_state_path = os.getenv("AFDB_STORAGE_STATE")  # Opcional, para perfil persistente
             browser = await p.chromium.launch(
 
-                headless=False,  # Ejecuta en modo visible para evitar detección
+                headless=True,  # Ejecuta en modo visible para evitar detección
                 args=[
+                    "--no-sandbox",
                     "--disable-blink-features=AutomationControlled",
-                    "--disable-web-security",
-                    "--disable-features=IsolateOrigins,site-per-process",
-                    "--window-size=1920,1080",
-                    "--start-maximized",
-                    "--window-position=2000,0",
+                    "--disable-dev-shm-usage",
+                    "--window-position=2000,0"
                 ]
             )
             ctx_args = {
