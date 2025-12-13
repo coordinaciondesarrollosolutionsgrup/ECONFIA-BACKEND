@@ -48,7 +48,11 @@ class ConsultaSerializer(serializers.ModelSerializer):
 class ResultadoSerializer(serializers.ModelSerializer):
     fuente = serializers.CharField(source="fuente.nombre_pila", default=None)
     tipo_fuente = serializers.CharField(source="fuente.tipo.nombre", default=None)
+<<<<<<< HEAD
     archivo_urls = serializers.SerializerMethodField()
+=======
+    archivo_url = serializer.SerialzerMethodField()
+>>>>>>> 5e2132a (fix: serializers, celery config y fuentes en producción)
 
     class Meta:
         model = Resultado
@@ -59,6 +63,7 @@ class ResultadoSerializer(serializers.ModelSerializer):
         if obj.archivo and request:
             return request.build_absolute_uri(obj.archivo.url)
         return None
+
 
 class CandidatoSerializer(serializers.ModelSerializer):
     class Meta:
