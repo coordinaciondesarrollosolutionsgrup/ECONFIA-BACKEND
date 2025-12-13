@@ -48,7 +48,7 @@ class ConsultaSerializer(serializers.ModelSerializer):
 class ResultadoSerializer(serializers.ModelSerializer):
     fuente = serializers.CharField(source="fuente.nombre_pila", default=None)
     tipo_fuente = serializers.CharField(source="fuente.tipo.nombre", default=None)
-    archivo = serializers.SerializerMethodField()
+    archivo_url= serializers.SerializerMethodField()
 
     class Meta:
         model = Resultado
