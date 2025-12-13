@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Consulta, Resultado, Perfil, Candidato, Fuente
-
+from django.conf import settings
 class FuenteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fuente
@@ -48,22 +48,18 @@ class ConsultaSerializer(serializers.ModelSerializer):
 class ResultadoSerializer(serializers.ModelSerializer):
     fuente = serializers.CharField(source="fuente.nombre_pila", default=None)
     tipo_fuente = serializers.CharField(source="fuente.tipo.nombre", default=None)
-<<<<<<< HEAD
-    archivo_urls = serializers.SerializerMethodField()
-=======
-    archivo_url = serializer.SerialzerMethodField()
->>>>>>> 5e2132a (fix: serializers, celery config y fuentes en producción)
+    archivo = serializers.SerializerMethodField()
 
     class Meta:
         model = Resultado
         fields = ["id", "consulta_id", "fuente", "tipo_fuente", "estado", "score", "mensaje", "archivo"]
-    
-    def get_archivo_urls(self, obj):
-        request = self.context.get('request')
-        if obj.archivo and request:
-            return request.build_absolute_uri(obj.archivo.url)
+    def get_archivo_url(self,obj):
+        if obj.archivo:
+            request = self.context.get('request')
+            return request.build_absolute_utl(
+                settings.MEDIA_URL + obj.archivo.name
+            )
         return None
-
 
 class CandidatoSerializer(serializers.ModelSerializer):
     class Meta:
