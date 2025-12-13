@@ -16,9 +16,11 @@ NOMBRE_SITIO = "eu_travelbans_pdf"
 
 
 def _content_disposition_filename(cd: str) -> str | None:
+from typing import Optional
+def _content_disposition_filename(cd: str) -> Optional[str]:
     if not cd:
         return None
-    m = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^\";]+)"?', cd, flags=re.IGNORECASE)
+    m = re.search(r'filename\*?=(?:UTF-8\'\'\)?"?([^\";]+)"?', cd, flags=re.IGNORECASE)
     return m.group(1) if m else None
 
 

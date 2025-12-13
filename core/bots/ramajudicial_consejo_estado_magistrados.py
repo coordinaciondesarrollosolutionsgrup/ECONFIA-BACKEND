@@ -1,3 +1,4 @@
+from typing import Optional
 # core/bots/ramajudicial_corte_constitucional_magistrados.py
 import os, re, unicodedata, asyncio
 from urllib.parse import urlencode, quote_plus
@@ -31,7 +32,7 @@ async def consultar_ramajudicial_corte_constitucional_magistrados(
     consulta_id: int,
     nombre: str,
     apellido: str = "",
-    site_id: str | None = None,   # <-- opcional; si lo conoces pásalo: p. ej. "10228", "389063", etc.
+    site_id: Optional[str] = None,   # <-- opcional; si lo conoces pásalo: p. ej. "10228", "389063", etc.
 ):
     # Fuente
     fuente_obj, _ = await sync_to_async(Fuente.objects.get_or_create)(

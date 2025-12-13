@@ -33,8 +33,13 @@ async def consultar_garantias_mobiliarias_nooficial(consulta_id, nombre, nro_bie
         async with async_playwright() as p:
             print("[RGM] Lanzando navegador...")
             browser = await p.chromium.launch(
-                headless=False,
-                args=["--disable-blink-features=AutomationControlled","--window-position=2000,0"]
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--window-position=2000,0"
+                ]
             )
 
             context = await browser.new_context(
