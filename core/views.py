@@ -721,7 +721,7 @@ def detalle_consulta(request, consulta_id):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def listar_resultados(request, consulta_id):
-    data = listar_resultados_interno(consulta_id)
+    data = listar_resultados_interno(consulta_id, request=request)
     return Response(data, status=status.HTTP_200_OK)
 
 @api_view(["GET"])
@@ -1155,8 +1155,8 @@ def listar_resultados_interno(consulta_id):
     )
     serializer = ResultadoSerializer(
         qs,
-        many=True
-        context={"request":request}
+        many=True,
+        context={"request":requests.request}
     )
     return serializer.data
 
