@@ -372,7 +372,7 @@ def procesar_consulta_contratista_por_nombres(consulta_id, datos, lista_nombres)
 
     # 3) Ejecutar en lotes (concurrency control)
     async def main_bots():
-        for batch in chunked(bot_configs, 50):
+        for batch in chunked(bot_configs, 100):
             await asyncio.gather(*(run_bot(b) for b in batch))
 
     async_to_sync(main_bots)()

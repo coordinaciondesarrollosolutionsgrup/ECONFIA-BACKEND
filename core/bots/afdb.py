@@ -57,11 +57,11 @@ TITLE_SEL    = ".views-field-title"
 BODY_SEL     = ".views-field-body"
 PATH_SEL     = ".views-field-path"
 
-NAV_TIMEOUT_MS = 120_000
-WAIT_IDLE_MS   = 6_000
-WAIT_AFTER_MS  = 1_000
-MANUAL_WAIT_MAX = 300
-MANUAL_POLL_INTERVAL = 5
+NAV_TIMEOUT_MS = 60_000
+WAIT_IDLE_MS   = 3_000
+WAIT_AFTER_MS  = 500
+MANUAL_WAIT_MAX = 150
+MANUAL_POLL_INTERVAL = 2
 
 async def _mover_mouse_aleatorio(page):
     try:
@@ -72,7 +72,7 @@ async def _mover_mouse_aleatorio(page):
             x = random.randint(0, box['width'] - 1)
             y = random.randint(0, box['height'] - 1)
             await page.mouse.move(x, y)
-            await asyncio.sleep(random.uniform(0.1, 0.4))
+            await asyncio.sleep(random.uniform(0.05, 0.2))
     except Exception:
         pass
 
@@ -177,7 +177,7 @@ async def _inject_token_generic(page, token: str, debug=False):
             }""",
             token
         )
-        await asyncio.sleep(0.8)
+        await asyncio.sleep(0.4)
         return True
     except Exception:
         return False
@@ -206,7 +206,7 @@ async def _attempt_resolve_with_capsolver(page, debug=False):
                 await page.evaluate("""() => { const f = document.querySelector('form'); if(f) f.submit(); }""")
             except Exception:
                 pass
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
             # verificar si desafío desapareció
             has = await _page_shows_challenge(page)
             return not has
@@ -223,7 +223,7 @@ async def _attempt_resolve_with_capsolver(page, debug=False):
                 await page.evaluate("""() => { const f = document.querySelector('form'); if(f) f.submit(); }""")
             except Exception:
                 pass
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
             has = await _page_shows_challenge(page)
             return not has
 

@@ -10,7 +10,7 @@ from core.models import Resultado, Fuente
 
 NOMBRE_SITIO = "opensanctions_adb"  # pon este mismo nombre en tu tabla Fuente
 URL_SEARCH = "https://www.opensanctions.org/search/?scope=adb_sanctions&q={q}"
-GOTO_TIMEOUT_MS = 180_000
+GOTO_TIMEOUT_MS = 90_000
 
 # Selectores (con clases ofuscadas, usamos "starts-with" / "contains" robustos)
 SEL_ALERT_NORES = "div.alert-heading.h4"  # <div class="alert-heading h4">No matching entities were found.</div>
@@ -89,9 +89,9 @@ async def consultar_opensanctions_adb(consulta_id: int, nombre: str, apellido: s
             q = urllib.parse.quote_plus(full_name)
             search_url = URL_SEARCH.format(q=q)
             await page.goto(search_url, timeout=GOTO_TIMEOUT_MS)
-            await page.wait_for_load_state("domcontentloaded", timeout=60_000)
+            await page.wait_for_load_state("domcontentloaded", timeout=30_000)
             try:
-                await page.wait_for_load_state("networkidle", timeout=30_000)
+                await page.wait_for_load_state("networkidle", timeout=15_000)
             except Exception:
                 pass
 
@@ -117,7 +117,7 @@ async def consultar_opensanctions_adb(consulta_id: int, nombre: str, apellido: s
                 for i in range(n):
                     item = items.nth(i)
                     try:
-                        title = (await item.locator(SEL_TITLE_A).first.inner_text(timeout=3_000)).strip()
+                        title = (await item.locator(SEL_TITLE_A).first.inner_text(timeout=1_500)).strip()
                     except Exception:
                         title = ""
 

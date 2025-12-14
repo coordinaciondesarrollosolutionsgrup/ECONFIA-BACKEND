@@ -57,7 +57,7 @@ async def consultar_biologia_consulta(consulta_id: int, cedula: str):
 
             # Navegar
             await page.goto(URL, wait_until="domcontentloaded", timeout=120000)
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(0.75)
 
             # Scroll para que aparezca el input
             await page.evaluate("window.scrollBy(0, 800);")
@@ -68,7 +68,7 @@ async def consultar_biologia_consulta(consulta_id: int, cedula: str):
             await page.locator(SEL_BTN_CONSULTAR).click()
 
             # Esperar resultados
-            await asyncio.sleep(3)
+            await asyncio.sleep(1.5)
 
             # Screenshot
             await page.screenshot(path=abs_png, full_page=True)

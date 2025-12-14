@@ -213,7 +213,7 @@ async def consultar_boletin_procuraduria(nombre: str, consulta_id: int, cedula: 
                     except Exception:
                         # reintento corto
                         try:
-                            await asyncio.sleep(1.0)
+                            await asyncio.sleep(0.5)
                             response = await page.goto(url, wait_until="domcontentloaded", timeout=60000)
                         except Exception:
                             response = None
@@ -234,9 +234,9 @@ async def consultar_boletin_procuraduria(nombre: str, consulta_id: int, cedula: 
 
                     # esperar recursos JS
                     try:
-                        await page.wait_for_load_state("networkidle", timeout=10000)
+                        await page.wait_for_load_state("networkidle", timeout=5000)
                     except Exception:
-                        await asyncio.sleep(0.5)
+                        await asyncio.sleep(0.25)
 
                     # leer body text para detectar mensajes de indisponibilidad
                     body_text = ""
@@ -274,7 +274,7 @@ async def consultar_boletin_procuraduria(nombre: str, consulta_id: int, cedula: 
                         except Exception:
                             pass
                         # jitter before next attempt
-                        await asyncio.sleep(1.0 + random.random() * 2.0)
+                        await asyncio.sleep(0.5 + random.random() * 1.0)
                         break  # break inner for to recreate browser/context and retry outer loop
 
                     # si llegamos aquí, la página cargó sin 403 ni mensaje de indisponibilidad
@@ -354,7 +354,7 @@ async def consultar_boletin_procuraduria(nombre: str, consulta_id: int, cedula: 
                 await _crear_resultado(consulta_id, fuente_obj, 0, "Sin Validar", f"Error tras varios intentos: {str(last_exception)}", rel_png)
                 return
 
-            await asyncio.sleep(1.0 + random.random() * 2.0)
+            await asyncio.sleep(0.5 + random.random() * 1.0)
             continue
 
     # Si salimos del loop sin resultado, registrar fallo genérico
