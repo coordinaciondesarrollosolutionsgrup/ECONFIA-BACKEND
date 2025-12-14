@@ -1,7 +1,7 @@
 from core.models import Fuente, TipoFuente
 from django.db import transaction
 
-def registrar_fuentes_si_faltan(lista_nombres_fuentes, tipo_nombre_default="General"):
+def registrar_fuentes_si_faltan(lista_nombres_fuentes, tipo_nombre_default=""):
     """
     Crea las fuentes que no existan en la base de datos, usando un TipoFuente genérico si es necesario.
     Imprime en consola si la fuente fue creada o ya existía.

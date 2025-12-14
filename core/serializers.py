@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Consulta, Resultado, Perfil, Candidato, Fuente
-from django.conf import settings
+
 class FuenteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fuente
@@ -48,26 +48,11 @@ class ConsultaSerializer(serializers.ModelSerializer):
 class ResultadoSerializer(serializers.ModelSerializer):
     fuente = serializers.CharField(source="fuente.nombre_pila", default=None)
     tipo_fuente = serializers.CharField(source="fuente.tipo.nombre", default=None)
-    archivo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Resultado
-        fields = [
-            "id",
-            "consulta_id",
-            "fuente",
-            "tipo_fuente",
-            "estado",
-            "score",
-            "mensaje",
-            "archivo_url",
-        ]
+        fields = ["id", "consulta_id", "fuente", "tipo_fuente", "estado", "score", "mensaje", "archivo"]
 
-    def get_archivo_url(self, obj):
-        request = self.context.get("request")
-        if obj.archivo and request:
-            return request.build_absolute_uri(obj.archivo.url)
-        return None
 
 class CandidatoSerializer(serializers.ModelSerializer):
     class Meta:
