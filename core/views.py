@@ -1153,6 +1153,12 @@ def listar_resultados_interno(consulta_id):
         .annotate(prioridad_tipo=prioridad)
         .order_by("prioridad_tipo", "fuente__tipo__nombre", "fuente__nombre")
     )
+    serializer = ResultadoSerializer(
+        qs,
+        many=True
+        context={"request":request}
+    )
+    return serializer.data
 
     serializer = ResultadoSerializer(qs, many=True)
     return serializer.data
