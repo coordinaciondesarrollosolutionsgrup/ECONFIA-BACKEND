@@ -94,9 +94,9 @@ def procesar_consulta(consulta_id, datos):
     total_start = perf_counter()
     async def main_bots():
         try:
-            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '12'))
+            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '20'))
         except Exception:
-            batch_size = 12
+            batch_size = 20
         print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -226,9 +226,9 @@ def procesar_consulta_por_nombres(consulta_id, datos, lista_nombres):
     total_start = perf_counter()
     async def main_bots():
         try:
-            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '6'))
+            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '10'))
         except Exception:
-            batch_size = 6
+            batch_size = 10
         print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)

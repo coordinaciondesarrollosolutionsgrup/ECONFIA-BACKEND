@@ -54,8 +54,12 @@
     {% endif %}
   ">
   <div class="cabecera-izq">
-    <img src="{% static 'img/logo.jpg' %}" alt="Logo">
-    <span class="nombre"></span>
+    {% if logo_b64 %}
+      <img src="{{ logo_b64 }}" alt="Logo" style="width:80px;height:80px;object-fit:contain;">
+    {% else %}
+      <img src="{% static 'img/logo.jpg' %}" alt="Logo" style="width:80px;height:80px;object-fit:contain;">
+    {% endif %}
+    <span class="nombre">ECONFIA</span>
   </div>
   <div class="cabecera-der">
     <img src="{{ qr_url }}" alt="QR Reporte" style="width:120px; height:120px;">
@@ -72,30 +76,18 @@
 
     <!-- Perfil -->
     <div class="perfil" style="border: 10px solid {{ color_riesgo }};">
-      {% if riesgo.categoria == "Bajo" %}
-        {% if candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
-          <img src="{% static 'img/placeholder_femenino_verde.png' %}" alt="Foto candidata">
-        {% else %}
-          <img src="{% static 'img/placeholder_verde.png' %}" alt="Foto candidato">
-        {% endif %}
+      {% if foto_b64 %}
+        <img src="{{ foto_b64 }}" alt="Foto candidato" style="width:120px;height:120px;object-fit:cover;">
+      {% elif candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
+        <img src="{% static 'img/placeholder_femenino_gris.png' %}" alt="Foto candidata">
+      {% elif riesgo.categoria == "Bajo" %}
+        <img src="{% static 'img/placeholder_verde.png' %}" alt="Foto candidato">
       {% elif riesgo.categoria == "Alto" %}
-        {% if candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
-          <img src="{% static 'img/placeholder_femenino_rojo.png' %}" alt="Foto candidata">
-        {% else %}
-          <img src="{% static 'img/placeholder_rojo.png' %}" alt="Foto candidato">
-        {% endif %}
+        <img src="{% static 'img/placeholder_rojo.png' %}" alt="Foto candidato">
       {% elif riesgo.categoria == "Medio" %}
-        {% if candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
-          <img src="{% static 'img/placeholder_femenino_amarillo.png' %}" alt="Foto candidata">
-        {% else %}
-          <img src="{% static 'img/placeholder_amarillo.png' %}" alt="Foto candidato">
-        {% endif %}
+        <img src="{% static 'img/placeholder_amarillo.png' %}" alt="Foto candidato">
       {% else %}
-        {% if candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
-          <img src="{% static 'img/placeholder_femenino_gris.png' %}" alt="Foto candidata">
-        {% else %}
-          <img src="{% static 'img/placeholder_gris.png' %}" alt="Foto candidato">
-        {% endif %}
+        <img src="{% static 'img/placeholder.png' %}" alt="Foto candidato">
       {% endif %}
     </div>
 
@@ -116,8 +108,8 @@
 <div class="estadisticas holograma" style="--riesgo-color: {{ color_riesgo }};">
   <h2>Estadísticas del candidato</h2>
   <div class="graficos">
-    <img id="mapa" src="data:image/png;base64,{{ mapa_riesgo }}" alt="Mapa de calor">
-    <img id="bubble" src="data:image/png;base64,{{ bubble_chart }}" alt="Mapa de burbuja">
+    <img id="mapa" src="{{ mapa_riesgo }}" alt="Mapa de calor" style="display:block;margin:0 auto;max-width:350px;max-height:220px;">
+    <img id="bubble" src="{{ bubble_chart }}" alt="Mapa de burbuja" style="display:block;margin:0 auto;max-width:350px;max-height:220px;">
   </div>
 </div>
 

@@ -1,0 +1,143 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Certicámara - Resultado Consulta</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', Arial, sans-serif;
+      background: #181c20;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .outer {
+      background: #23262b;
+      border-radius: 32px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      padding: 48px 0;
+      width: 600px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+    }
+    .container {
+      background: #23262b;
+      border-radius: 24px;
+      box-shadow: none;
+      padding: 36px 32px 28px 32px;
+      position: relative;
+      overflow: hidden;
+      color: #f3f6fa;
+      width: 420px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .header {
+      display: flex;
+      justify-content: flex-end;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .logo-econfia {
+      height: 38px;
+      width: auto;
+      margin-left: auto;
+      margin-right: 0;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.10));
+    }
+    .logo-text {
+      color: #fff;
+      font-size: 0.95em;
+      font-weight: 500;
+      margin-left: 8px;
+      letter-spacing: 1px;
+      opacity: 0.85;
+      position: relative;
+      top: 8px;
+    }
+    h1 {
+      color: #f3f6fa;
+      font-size: 1.6em;
+      margin: 0 0 18px 0;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    }
+    .fields {
+      margin-top: 0;
+      padding: 24px 24px 18px 24px;
+      border-radius: 16px;
+      background: #202226;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.10);
+      border: 1px solid #23262b;
+      margin-bottom: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7em;
+    }
+    .field {
+      display: flex;
+      flex-wrap: wrap;
+      font-size: 1em;
+      color: #f3f6fa;
+      word-break: break-all;
+    }
+    .label {
+      font-weight: 700;
+      color: #f3f6fa;
+      letter-spacing: 0.7px;
+      min-width: 140px;
+      margin-right: 8px;
+    }
+    .value {
+      color: #f3f6fa;
+      font-weight: 400;
+      word-break: break-all;
+    }
+    .message {
+      font-size: 1.08em;
+      color: #e53935;
+      margin-top: 1.2em;
+      font-weight: 700;
+      letter-spacing: 0.7px;
+      text-align: left;
+    }
+    .meta {
+      font-size: 0.95em;
+      color: #b0b7c3;
+      margin-top: 1.8em;
+      text-align: right;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="outer">
+    <div class="container">
+      <div class="header">
+        <img src="{% static 'static/img/Econfialogoblanco.png' %}" alt="Logo Econfia" class="logo-econfia" />
+      </div>
+      <h1>Resultado Certicámara</h1>
+      <div class="fields">
+        <div class="field"><span class="label">UUID:</span><span class="value">{{ uuid }}</span></div>
+        <div class="field"><span class="label">Documento:</span><span class="value">{{ id }}</span></div>
+        <div class="field"><span class="label">Tipo de documento:</span><span class="value">{{ documentType }}</span></div>
+        <div class="field"><span class="label">Fecha de consulta:</span><span class="value">{{ creationDate }}</span></div>
+        <div class="field"><span class="label">Advertencia:</span><span class="value">{{ warning }}</span></div>
+        <div class="field"><span class="label">Tiempo de procesamiento:</span><span class="value">{{ processingTime }} seg</span></div>
+      </div>
+      <div class="message">{{ message }}</div>
+      <div class="meta">Consulta generada por Econfia</div>
+    </div>
+  </div>
+</body>
+</html>

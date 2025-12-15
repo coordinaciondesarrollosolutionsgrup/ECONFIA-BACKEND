@@ -1,3 +1,57 @@
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.http import HttpResponse
+from pathlib import Path
+from weasyprint import HTML, CSS
+from django.conf import settings
+from .models import Consolidado
+import qrcode
+from io import BytesIO
+from django.utils.timezone import now
+
+# Endpoint de prueba para validar aplicación de CSS en PDF con WeasyPrint
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def test_pdf_css(request):
+    html = """
+    <html>
+      <head></head>
+      <body>
+        <h1 class='titulo'>PDF TEST</h1>
+      </body>
+    </html>
+    """
+    base_path = Path(settings.STATIC_ROOT).resolve()
+    css_path = base_path / "css" / "style.css"
+    if not css_path.exists():
+        return HttpResponse(f"CSS no encontrado: {css_path}", status=500)
+    pdf = HTML(
+        string=html,
+        base_url=base_path.as_uri()
+    ).write_pdf(
+        stylesheets=[CSS(filename=str(css_path))]
+    )
+    return HttpResponse(pdf, content_type="application/pdf")
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from .serializers import FuenteSerializer
+# CRUD para Fuente
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def actualizar_fuente(request, fuente_id):
+    fuente = get_object_or_404(Fuente, id=fuente_id)
+    serializer = FuenteSerializer(fuente, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=400)
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def eliminar_fuente(request, fuente_id):
+    fuente = get_object_or_404(Fuente, id=fuente_id)
+    fuente.delete()
+    return Response({"detail": "Fuente eliminada"}, status=204)
 from django.http import JsonResponse
 from .models import Consulta, Resultado, Candidato, Fuente
 from .task import procesar_consulta, reintentar_bot, procesar_consulta_por_nombres, procesar_consulta_contratista_por_nombres
@@ -477,8 +531,7 @@ def api_consultar(request):
     if not perfil:
         return Response({"error": "Perfil de usuario no encontrado"}, status=status.HTTP_400_BAD_REQUEST)
 
-    if (perfil.consultas_disponibles or 0) <= 0:
-        return Response({"error": "No tienes consultas disponibles"}, status=status.HTTP_403_FORBIDDEN)
+
 
     # ---------------------------------------------
     # Ya NO depende del plan. Ahora depende de los parámetros (NUEVO)
@@ -630,8 +683,7 @@ def api_consultar(request):
         )
 
         # Descontar siempre una consulta
-        perfil.consultas_disponibles = max(0, (perfil.consultas_disponibles or 0) - 1)
-        perfil.save(update_fields=["consultas_disponibles"])
+
 
         # Enriquecer payload para las tasks
         if isinstance(datos, dict):
@@ -716,7 +768,20 @@ def listar_consultas(request):
 def detalle_consulta(request, consulta_id):
     consulta = get_object_or_404(Consulta, id=consulta_id)
     serializer = ConsultaDetalleSerializer(consulta)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    # Buscar resultados asociados a la consulta
+    resultados = Resultado.objects.filter(consulta=consulta)
+    imagen_resultado = None
+    # Prioridad: Certicámara PNG, luego Registraduría PNG
+    certicamara = resultados.filter(fuente__nombre__icontains="certicamara", archivo__iendswith=".png").first()
+    if certicamara and certicamara.archivo:
+        imagen_resultado = certicamara.archivo
+    else:
+        registraduria = resultados.filter(fuente__nombre__icontains="registraduria", archivo__iendswith=".png").first()
+        if registraduria and registraduria.archivo:
+            imagen_resultado = registraduria.archivo
+    data = serializer.data
+    data["imagen_resultado"] = imagen_resultado
+    return Response(data, status=status.HTTP_200_OK)
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -1179,7 +1244,7 @@ def generar_mapa_calor_interno(consulta_id):
 
     # ——— Matriz (consecuencia x probabilidad) ———
     riesgo_matrix = np.array([
-        [1,  2,  3,  4,  5],
+        [1,  2,  3,  4, 5],
         [2,  4,  6,  8, 10],
         [3,  6,  9, 12, 15],
         [4,  8, 12, 16, 20],
@@ -1368,12 +1433,10 @@ def reporte(request, consulta_id):
     nivel_color = {"I": "red", "II": "orange", "III": "yellow", "IV": "green"}
     color_riesgo = nivel_color.get(calcular_riesgo.get("nivel_global"), "gray")
 
-    # Convertir ruta a URL absoluta
     for r in resultados:
         if r.get("archivo"):
             relative_path = r["archivo"].replace("\\", "/")
             r["archivo_url"] = request.build_absolute_uri(settings.MEDIA_URL + relative_path)
-
 
     context = {
         "mapa_riesgo": mapa_riesgo_data,
@@ -1383,53 +1446,48 @@ def reporte(request, consulta_id):
     }
 
     html_string = render_to_string("reportes/consolidado.html", context)
-    pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
-
+    from pathlib import Path
+    from weasyprint import HTML, CSS
+    base_path = Path(settings.STATIC_ROOT).resolve()
+    css_path = base_path / "css" / "style.css"
+    if not css_path.exists():
+        raise FileNotFoundError(f"CSS no encontrado: {css_path}")
+    pdf = HTML(
+        string=html_string,
+        base_url=base_path.as_uri()
+    ).write_pdf(
+        stylesheets=[CSS(filename=str(css_path))]
+    )
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = "inline; filename=reporte.pdf"
     return response
 
 def descargar_reporte(request, consulta_id):
-    # Datos internos ya calculados
     calcular_riesgo = calcular_riesgo_interno_b(consulta_id)
     resultados = listar_resultados_interno(consulta_id)
-    # mapa_riesgo_data = generar_mapa_calor_interno(consulta_id)
-
-    # Diccionario de colores según nivel de riesgo
     nivel_color = {"I": "red", "II": "orange", "III": "yellow", "IV": "green"}
     color_riesgo = nivel_color.get(calcular_riesgo.get("nivel_global"), "gray")
-
     context = {
-        # "mapa_riesgo": mapa_riesgo_data,
         "resultados": resultados,
         "riesgo": calcular_riesgo,
         "color_riesgo": color_riesgo,
     }
-
-    # Renderizar HTML y generar PDF
     html_string = render_to_string("reportes/consolidado.html", context)
-    pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
-
-    # Crear respuesta con descarga
+    from pathlib import Path
+    from weasyprint import HTML, CSS
+    base_path = Path(settings.STATIC_ROOT).resolve()
+    css_path = base_path / "css" / "style.css"
+    if not css_path.exists():
+        raise FileNotFoundError(f"CSS no encontrado: {css_path}")
+    pdf = HTML(
+        string=html_string,
+        base_url=base_path.as_uri()
+    ).write_pdf(
+        stylesheets=[CSS(filename=str(css_path))]
+    )
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="reporte_{consulta_id}.pdf"'
     return response
-
-from datetime import timedelta
-
-import qrcode
-from io import BytesIO
-from django.core.files.base import ContentFile
-from django.urls import reverse
-
-import qrcode
-from io import BytesIO
-from django.core.files.base import ContentFile
-from django.urls import reverse
-from weasyprint import HTML
-from django.utils.timezone import now
-from .models import Consolidado
-from django.utils.text import slugify 
 
 def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
     from django.db import transaction
@@ -1594,10 +1652,18 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
     template_path = templates_por_tipo.get(tipo_id, "reportes/consolidado.html")
 
     html_string = render_to_string(template_path, context)
+    from pathlib import Path
+    from weasyprint import HTML, CSS
+    base_path = Path(settings.STATIC_ROOT).resolve()
+    css_path = base_path / "css" / "style.css"
+    if not css_path.exists():
+        raise FileNotFoundError(f"CSS no encontrado: {css_path}")
     pdf_bytes = HTML(
         string=html_string,
-        base_url=(request.build_absolute_uri() if request else None)
-    ).write_pdf()
+        base_url=base_path.as_uri()
+    ).write_pdf(
+        stylesheets=[CSS(filename=str(css_path))]
+    )
 
     filename = safe_filename(candidato.nombre, candidato.apellido, candidato.cedula, ext="pdf")
 
@@ -1640,7 +1706,7 @@ def generar_consolidado(request, consulta_id, tipo_id):
         traceback.print_exc()
         return Response({"status": "error", "message": str(e)}, status=500)
 
-from django.db.models import Avg, Count, Q
+from django.db.models import Count, Avg, Q
 
 def resumen_consulta_interno(consulta_id):
     try:
@@ -1768,7 +1834,7 @@ def resumen_usuario(request):
         "usuario": usuario.username,
         "perfil": {
             "plan": perfil.plan if perfil else None,
-            "consultas_disponibles": perfil.consultas_disponibles if perfil else 0,
+
         },
         "estadisticas": {
             "consultas": {
@@ -1836,7 +1902,18 @@ def generar_consolidado_api(request, consulta_id, tipo_id):
 
     # --- Render PDF ---
     html_string = render_to_string("reportes/consolidado_pdf.html", context)
-    pdf_bytes = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
+    from pathlib import Path
+    from weasyprint import HTML, CSS
+    base_path = Path(settings.STATIC_ROOT).resolve()
+    css_path = base_path / "css" / "style.css"
+    if not css_path.exists():
+        raise FileNotFoundError(f"CSS no encontrado: {css_path}")
+    pdf_bytes = HTML(
+        string=html_string,
+        base_url=base_path.as_uri()
+    ).write_pdf(
+        stylesheets=[CSS(filename=str(css_path))]
+    )
 
     # --- Respuesta HTTP (mostrar inline en navegador) ---
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
@@ -1846,7 +1923,7 @@ def generar_consolidado_api(request, consulta_id, tipo_id):
 
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def generar_consolidado_descarga(request, consulta_id, tipo_id):
     try:
         # Genera y guarda el consolidado en la base de datos
@@ -2289,3 +2366,144 @@ def test_email(request):
                         status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def test_pdf_consolidado(request):
+    print("[DEBUG] Entrando a test_pdf_consolidado")
+    # Datos simulados para el consolidado
+    import qrcode
+    import base64
+    from io import BytesIO
+    ejemplos = []
+    riesgos = [
+        ("Bajo", "#00E676", 1, "Masculino", "Camilo", "Ruiz", "123456789"),
+        ("Medio", "#FFC400", 3, "Masculino", "Carlos", "López", "987654321"),
+        ("Alto", "#FF1744", 5, "Femenino", "María", "Ruiz", "555555555"),
+    ]
+    # Imagen PNG base64 de ejemplo (un cuadrado azul)
+    import matplotlib.pyplot as plt
+    import numpy as np
+    # Utilidad para convertir imagen local a base64
+    def file_to_base64(path):
+        try:
+            with open(path, "rb") as f:
+                return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+        except Exception as e:
+            print(f"[WARN] No se pudo abrir {path}: {e}")
+            return ""
+
+    # Logo y foto de candidato (usa tus rutas reales de estáticos recolectados)
+    import os
+    static_img = os.path.join(settings.STATIC_ROOT, "img")
+    logo_path = os.path.join(static_img, "logo.jpg")
+    foto_path = os.path.join(static_img, "placeholder_verde.png")
+    print(f"[DEBUG] STATIC_ROOT: {settings.STATIC_ROOT}")
+    print(f"[DEBUG] logo_path: {logo_path} exists: {os.path.exists(logo_path)}")
+    print(f"[DEBUG] foto_path: {foto_path} exists: {os.path.exists(foto_path)}")
+    logo_b64 = file_to_base64(logo_path) if os.path.exists(logo_path) else ""
+    foto_b64 = file_to_base64(foto_path) if os.path.exists(foto_path) else ""
+    print("[DEBUG] Generando matriz de calor y bubble chart...")
+    print("[DEBUG] Renderizando HTML y generando PDF...")
+
+    # Matriz de calor y gráfico de burbujas de ejemplo (simula consulta real)
+    def matriz_calor_base64():
+        import matplotlib.pyplot as plt
+        import numpy as np
+        fig, ax = plt.subplots(figsize=(4,3))
+        data = np.random.randint(0, 10, (5, 5))
+        cax = ax.matshow(data, cmap="RdYlGn")
+        for (i, j), z in np.ndenumerate(data):
+            ax.text(j, i, f"{z}", ha='center', va='center', color='black')
+        plt.title("Mapa de Calor de Riesgo")
+        plt.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
+        plt.close(fig)
+        return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+    def bubble_chart_base64():
+        import matplotlib.pyplot as plt
+        import numpy as np
+        fig, ax = plt.subplots(figsize=(4,3))
+        x = np.random.rand(10)
+        y = np.random.rand(10)
+        sizes = 1000 * np.random.rand(10)
+        ax.scatter(x, y, s=sizes, alpha=0.5)
+        plt.title("Bubble Chart de Ejemplo")
+        plt.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
+        plt.close(fig)
+        return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+    mapa_riesgo_b64 = matriz_calor_base64()
+    bubble_chart_b64 = bubble_chart_base64()
+
+    for idx, (categoria, color, score, sexo, nombre, apellido, cedula) in enumerate(riesgos, 1):
+        # Generar QR como base64
+        qr = qrcode.make(f"https://econfia.co/consulta/{100+idx}")
+        qr_io = BytesIO()
+        qr.save(qr_io, format="PNG")
+        qr_b64 = "data:image/png;base64," + base64.b64encode(qr_io.getvalue()).decode()
+        ejemplos.append({
+            "mapa_riesgo": mapa_riesgo_b64,
+            "bubble_chart": bubble_chart_b64,
+            "logo_b64": logo_b64,
+            "foto_b64": foto_b64,
+            "resultados": [
+                {"fuente": "Fuente Ejemplo", "tipo_fuente": "Tipo", "estado": "Validado", "score": score, "mensaje": f"Mensaje de ejemplo para {categoria}", "archivo": None},
+            ],
+            "riesgo": {"riesgo": categoria, "categoria": categoria},
+            "color_riesgo": color,
+            "consulta_id": 100+idx,
+            "consolidado_id": 200+idx,
+            "fecha_generacion": "2025-12-15 12:00:00",
+            "fecha_actualizacion": "2025-12-15 12:00:00",
+            "usuario": "prueba",
+            "tipo_reporte": "Consolidado de ejemplo",
+            "ip_generacion": "127.0.0.1",
+            "qr_url": qr_b64,
+            "candidato": {
+                "cedula": cedula,
+                "tipo_doc": "CC",
+                "nombre": nombre,
+                "apellido": apellido,
+                "fecha_nacimiento": "1990-01-01",
+                "fecha_expedicion": "2010-01-01",
+                "tipo_persona": "Natural",
+                "sexo": sexo,
+            },
+        })
+    # DEBUG: Verifica rutas de logo y placeholders en STATIC_ROOT/img/
+    # from pathlib import Path
+    # import os
+    # static_img = Path(settings.STATIC_ROOT) / 'img'
+    # print('Logo existe:', os.path.exists(static_img / 'logo.jpg'))
+    # print('Placeholder verde:', os.path.exists(static_img / 'placeholder_verde.png'))
+    from django.template.loader import render_to_string
+    from pathlib import Path
+    from weasyprint import HTML, CSS
+    # from django.conf import settings  # <-- Eliminar este import local
+    base_path = Path(settings.STATIC_ROOT).resolve()
+    css_path = base_path / "css" / "style.css"
+    if not css_path.exists():
+        return HttpResponse(f"CSS no encontrado: {css_path}", status=500)
+    try:
+        html_string = "".join([render_to_string("reportes/consolidado.html", ctx) for ctx in ejemplos])
+        pdf = HTML(
+            string=html_string,
+            base_url=base_path.as_uri()
+        ).write_pdf(
+            stylesheets=[CSS(filename=str(css_path))]
+        )
+        print("[DEBUG] PDF generado correctamente")
+        return HttpResponse(pdf, content_type="application/pdf")
+    except Exception as e:
+        print(f"[ERROR] Fallo al generar PDF: {e}")
+        import traceback
+        traceback.print_exc()
+        return HttpResponse(f"Error generando PDF: {e}", status=500)
