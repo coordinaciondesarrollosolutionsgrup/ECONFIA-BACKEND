@@ -213,7 +213,7 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
             contexto = await navegador.new_context()
             pagina = await contexto.new_page()
 
-            await pagina.goto(url, wait_until="domcontentloaded", timeout=15000)
+            await pagina.goto(url, wait_until="networkidle")
 
             # ───── Obtener iframe del formulario ─────
             form_ctx = await get_iframe_form(pagina)
@@ -225,7 +225,7 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
                 sel_tipo = await localizar_select_tipo(form_ctx)
                 if sel_tipo:
                     await sel_tipo.select_option(TIPO_DOC_MAP.get(tipo_doc.upper(), tipo_doc.upper()))
-                    await form_ctx.wait_for_timeout(250)
+                    await form_ctx.wait_for_timeout(500)
             except:
                 pass
 
@@ -258,7 +258,7 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
                 captcha_text = await resolver_captcha_imagen(captcha_path)
 
                 if not captcha_text:
-                    await form_ctx.wait_for_timeout(600)
+                    await form_ctx.wait_for_timeout(1200)
                     continue
 
                 try:
@@ -268,7 +268,7 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
 
                 # ───── Click y esperar popup ─────
                 try:
-                    async with pagina.expect_popup(timeout=4000) as pop:
+                    async with pagina.expect_popup(timeout=8000) as pop:
                         await form_ctx.click('input#btnConsultar')
                     pagina_resultado = await pop.value
                     await pagina_resultado.wait_for_load_state("networkidle")
