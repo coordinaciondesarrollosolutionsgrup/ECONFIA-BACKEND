@@ -79,7 +79,7 @@ def procesar_consulta(consulta_id, datos):
     # --- SEPARACIÓN REAL DE BOTS RÁPIDOS Y LENTOS ---
     SLOW_BOT_NAMES = {
         "ruaf", "contraloria", "simit", "porvenir", "runt", "inpec", "sisben",
-        "antecedentes_fiscales", "procuraduria", "policia_nacional", "movilidad_bogota"
+        "antecedentes_fiscales", "procuraduria", "policia_nacional", "movilidad_bogota","libreta_militar",
     }
     bot_configs_all = get_bot_configs(consulta_id, datos)
     FAST_BOTS = []
@@ -94,9 +94,9 @@ def procesar_consulta(consulta_id, datos):
     total_start = perf_counter()
     async def main_bots():
         try:
-            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '20'))
+            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '100'))
         except Exception:
-            batch_size = 20
+            batch_size = 100
         print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -226,9 +226,9 @@ def procesar_consulta_por_nombres(consulta_id, datos, lista_nombres):
     total_start = perf_counter()
     async def main_bots():
         try:
-            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '10'))
+            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '60'))
         except Exception:
-            batch_size = 10
+            batch_size = 60
         print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -421,11 +421,16 @@ async def _llamar_consolidado_async(consulta_id: int):
 
 @shared_task
 def procesar_consulta_contratista_por_nombres(consulta_id, datos, lista_nombres):
+    import time
     async def run_bot(bot):
+        start = time.perf_counter()
         try:
             await bot["func"](**bot["kwargs"])
         except Exception as e:
             print(f"Error en bot {bot['func'].__name__}: {e}")
+        finally:
+            elapsed = time.perf_counter() - start
+            print(f"[BOT] {bot.get('name', bot['func'].__name__)} → {elapsed:.2f}s")
 
     def chunked(iterable, size):
         it = iter(iterable)

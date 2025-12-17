@@ -176,7 +176,10 @@ async def consultar_libreta_militar(consulta_id: int, cedula: str, tipo_doc: str
             pagina = await ctx.new_page()
             pagina.set_default_timeout(45000)
 
-            await pagina.goto(url, wait_until="networkidle")
+            # OPTIMIZACIÓN: avanzar tan pronto el DOM esté listo
+            await pagina.goto(url, wait_until="domcontentloaded")
+            # Esperar solo el select necesario
+            await pagina.wait_for_selector('select#ctl00_MainContent_drpDocumentType', timeout=20000)
 
             # Cerrar posibles banners/cookies/modales que tapen el formulario
             for sel in [

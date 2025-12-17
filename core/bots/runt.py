@@ -157,19 +157,19 @@ async def consultar_runt(consulta_id: int, tipo_doc: str, numero: str):
 
                 page = await ctx.new_page()
                 await page.goto(URL, wait_until="domcontentloaded", timeout=120000)
-                await page.wait_for_timeout(1200)
+                # OPTIMIZACIÓN: esperar solo los elementos clave
+                await page.wait_for_selector(SEL_MAT_SELECT_TRIGGER, timeout=10000)
+                await page.wait_for_selector(SEL_DOC_INPUT, timeout=10000)
 
                 # seleccionar tipo de documento si aplica
                 try:
                     sel_trigger = page.locator(SEL_MAT_SELECT_TRIGGER).first
                     if await sel_trigger.count() > 0:
                         await sel_trigger.click()
-                        await page.wait_for_timeout(600)
                         opcion_texto = DOC_TYPE_MAP.get((tipo_doc or "").strip().upper(), "Cédula Ciudadanía")
                         opt = page.locator(f"{SEL_MAT_OPTION_TEXT}:text-is('{opcion_texto}')").first
                         if await opt.count() > 0:
                             await opt.click()
-                            await page.wait_for_timeout(300)
                 except Exception:
                     pass
 

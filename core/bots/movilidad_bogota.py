@@ -50,6 +50,10 @@ async def _resolver_recaptcha(page):
         if not sitekey:
             return False
 
+        # OPTIMIZACIÓN: esperar solo el iframe y el campo de respuesta
+        await page.wait_for_selector("iframe[src*='recaptcha/api2/anchor']", timeout=10000)
+        await page.wait_for_selector("#g-recaptcha-response", timeout=10000)
+
         token = await resolver_captcha_v2(page.url, sitekey)
         if not token:
             return False

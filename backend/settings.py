@@ -16,7 +16,7 @@ config = Config(RepositoryEnv(str(ENV_FILE)))
 # CORE DJANGO
 # --------------------------------------------------
 SECRET_KEY = config("SECRET_KEY")
-DEBUG = config("DJANGO_DEBUG", cast=bool, default=False)
+DEBUG = config("DJANGO_DEBUG", cast=bool, default=True)
 ALLOWED_HOSTS = config(
     "DJANGO_ALLOWED_HOSTS",
     cast=Csv(),

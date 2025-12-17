@@ -190,10 +190,8 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                 # 1) Abrir SIMIT
                 print(f"[SIMIT] Abriendo SIMIT: {SIMIT_URL}")
                 await page.goto(SIMIT_URL, timeout=120000, wait_until="domcontentloaded")
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=8000)
-                except Exception:
-                    print("[SIMIT] No se alcanzó networkidle tras abrir la página.")
+                # OPTIMIZACIÓN: esperar solo los campos necesarios
+                await page.wait_for_selector("#txtBusqueda", timeout=20000)
 
                 # 2) Cerrar modal informativo si aparece
                 try:
@@ -203,13 +201,10 @@ async def consultar_simit(cedula: str, consulta_id: int, tipo_doc: str = "CC"):
                     print("[SIMIT] No apareció modal informativo.")
 
                 # 3) Ingresar cédula y consultar
-                await page.wait_for_selector("#txtBusqueda", timeout=20000)
                 await page.fill("#txtBusqueda", str(cedula))
                 await page.click("#consultar")
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=8000)
-                except Exception:
-                    print("[SIMIT] No se alcanzó networkidle tras consultar.")
+                # Esperar solo el resultado necesario
+                await page.wait_for_selector("#consultar", state="attached", timeout=10000)
 
                 # 4) Detectar resultado
                 cont_sin = page.locator("text=/no\\s+(posee|tienes?).*pendientes\\s+de\\s+pago/i").first

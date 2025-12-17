@@ -104,11 +104,28 @@ async def consultar_procuraduria(consulta_id, cedula, tipo_doc):
             page = await context.new_page()
 
             await page.goto(PAGE_URL, wait_until="domcontentloaded", timeout=120000)
-            try:
-                await page.wait_for_load_state("networkidle", timeout=15000)
-            except Exception:
-                pass
-            await page.wait_for_timeout(1000)
+            # OPTIMIZACIÓN: Avanzar tan pronto el iframe y el selector estén listos, sin esperar networkidle ni sleeps innecesarios
+            # Ubicar el iframe del formulario
+            frame = None
+            for _ in range(20):
+                for f in page.frames:
+                    if "webcert/Certificado.aspx" in (f.url or ""):
+                        frame = f
+                        break
+                if frame:
+                    break
+                await asyncio.sleep(0.2)
+            if not frame and page.frames and len(page.frames) > 1:
+                frame = page.frames[-1]
+            if not frame:
+                try:
+                    await page.screenshot(path=err_png_abs, full_page=True)
+                    evidencia_rel = err_png_rel
+                except Exception:
+                    evidencia_rel = ""
+                raise Exception("No se encontró el iframe del formulario de consulta.")
+            # Esperar solo el selector necesario
+            await frame.wait_for_selector('#ddlTipoID', timeout=15000)
 
             # Ubicar el iframe del formulario
             frame = None

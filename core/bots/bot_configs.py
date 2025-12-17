@@ -122,7 +122,7 @@ from. mintransporte_capacitaciones import consultar_mintransporte_capacitaciones
 from.scj_mas_buscados_pdf import consultar_scj_mas_buscados_pdf
 from.wikipedia_busqueda import consultar_wikipedia_busqueda
 from.defunciones import consultar_defunciones
-#from .plantilla import consultar_fuentes
+from .plantilla import consultar_fuentes
 from.adb_sanctions import consultar_opensanctions_adb
 from.opensanctions_ebrd_ineligible import consultar_opensanctions_ebrd_ineligible 
 from.opensanctions_eu_fsf import consultar_opensanctions_eu_fsf
@@ -1052,15 +1052,15 @@ def get_bot_configs(consulta_id, datos):
                 "apellido": datos["apellido"],
             }
         },
-        #        {
-         #   'name':"consultar_fuentes",
-          #  'func': consultar_fuentes,
-           # 'kwargs': {
-            #   'consulta_id': consulta_id,
-             #   'cedula': datos['cedula'],
-              #  'nombre_persona': f"{datos.get('nombre', '')} {datos.get('apellido', '')}".strip(),
-           # }
-       # },
+               {
+            'name':"consultar_fuentes",
+            'func': consultar_fuentes,
+            'kwargs': {
+               'consulta_id': consulta_id,
+                'cedula': datos['cedula'],
+                'nombre_persona': f"{datos.get('nombre', '')} {datos.get('apellido', '')}".strip(),
+            }
+        },
             {
             "name": "dhs_search",
             "func": consultar_dhs_search,

@@ -1,6 +1,7 @@
 # core/urls.py
 from django.urls import path
 from . import views
+from .import views_admin
 
 urlpatterns = [
     path('api/consultar/', views.api_consultar),
@@ -37,5 +38,9 @@ urlpatterns = [
 
     path("api/test_pdf_css/", views.test_pdf_css, name="test_pdf_css"),
     path("api/test_pdf_consolidado/", views.test_pdf_consolidado, name="test_pdf_consolidado"),
-    path("api/test-email/", views.test_email)
+    path("api/test-email/", views.test_email),
+    path('api/admin/users/', views_admin.admin_list_users, name='admin_list_users'),
+    path('api/admin/fuentes/', views_admin.admin_list_fuentes, name='admin_list_fuentes'),
+    path('api/admin/fuentes/<int:fuente_id>/', views_admin.admin_edit_fuente, name='admin_edit_fuente'),
+    path('api/admin/tipos-fuente/', views_admin.admin_tipo_fuente, name='admin_tipo_fuente'),
 ]

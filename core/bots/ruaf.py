@@ -163,41 +163,24 @@ async def consultar_ruaf(cedula, tipo_doc, consulta_id, fecha_expedicion=None):
         try:
             print(f"🔄 [RUAF] Intento general {intento_general}/{MAX_INTENTOS}")
             async with async_playwright() as p:
-                navegador = await p.firefox.launch(
-                    headless=True
-                )
-                # Rotar user-agent
+                navegador = await p.firefox.launch(headless=True)
                 ua = user_agents[intento_general % len(user_agents)]
                 page = await navegador.new_page(user_agent=ua)
-                # Simula movimiento de mouse para evitar detección
                 await page.mouse.move(100, 200)
-                await asyncio.sleep(3)
                 # Agregar headers realistas
                 await page.set_extra_http_headers({
                     "Accept-Language": "es-ES,es;q=0.9",
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                     "Referer": "https://www.google.com/",
                 })
-                await page.goto(URL, wait_until="load", timeout=60000)
-                await asyncio.sleep(2)
+                # OPTIMIZACIÓN: avanzar tan pronto el DOM esté listo
+                await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
                 # 1) Aceptar términos y condiciones si aplica
                 await _aceptar_terminos(page)
-                # 2) Esperar iframe del formulario
+                # 2) Esperar solo el campo de identificación, no toda la red
                 print("⏳ Esperando formulario RUAF...")
-                await page.wait_for_load_state("networkidle", timeout=30000)
-                await asyncio.sleep(3)
-                # DEBUG: Guardar screenshot para diagnosticar
-                debug_screenshot = os.path.join(absolute_folder, f"debug_antes_iframe_{timestamp}.png")
-                await page.screenshot(path=debug_screenshot, full_page=True)
-                print(f"📸 Screenshot guardado en: {debug_screenshot}")
-                # DEBUG: Guardar HTML para análisis
-                debug_html = os.path.join(absolute_folder, f"debug_html_{timestamp}.html")
-                with open(debug_html, 'w', encoding='utf-8') as f:
-                    f.write(await page.content())
-                print(f"📄 HTML guardado en: {debug_html}")
                 # Intentar encontrar el formulario - primero en iframe, luego en la página principal
                 frame_locator = None
-                # Opción 1: Buscar iframe
                 iframe_count = await page.locator('iframe').count()
                 print(f"ℹ Número de iframes encontrados: {iframe_count}")
                 if iframe_count > 0:
@@ -216,7 +199,8 @@ async def consultar_ruaf(cedula, tipo_doc, consulta_id, fecha_expedicion=None):
                         print("✅ Usando página principal para buscar campos")
                     else:
                         raise Exception("No se encontró formulario (ni iframe ni selectores en página principal)")
-                await frame_locator.locator('#MainContent_txbNumeroIdentificacion').wait_for(timeout=30000)
+                # Esperar solo el campo necesario
+                await frame_locator.locator('#MainContent_txbNumeroIdentificacion').wait_for(state="visible", timeout=30000)
                 print("✏ Llenando formulario...")
                 select_candidates = [
                     '#ddlTiposDocumentos',
@@ -235,12 +219,11 @@ async def consultar_ruaf(cedula, tipo_doc, consulta_id, fecha_expedicion=None):
                 await frame_locator.locator('#MainContent_txbNumeroIdentificacion').fill(cedula)
                 await frame_locator.locator('#MainContent_datepicker').fill(fecha_formateada)
                 await page.keyboard.press("Escape")
-                await asyncio.sleep(1)
                 # 5) Intentos de captcha
                 for intento_captcha in range(1, MAX_INTENTOS_CAPTCHA + 1):
                     print(f"🔐 Intento captcha {intento_captcha}/{MAX_INTENTOS_CAPTCHA}")
                     captcha_path = os.path.join(absolute_folder, f"captcha_{NOMBRE_SITIO}.png")
-                    await frame_locator.locator('img[src*="Captcha"]').wait_for(timeout=10000)
+                    await frame_locator.locator('img[src*="Captcha"]').wait_for(state="visible", timeout=10000)
                     await frame_locator.locator('img[src*="Captcha"]').screenshot(path=captcha_path)
                     preprocesar_captcha(captcha_path, captcha_path)
                     captcha_texto = await resolver_captcha_imagen(captcha_path)
@@ -250,7 +233,7 @@ async def consultar_ruaf(cedula, tipo_doc, consulta_id, fecha_expedicion=None):
                         pass
                     await frame_locator.locator('#MainContent_txtCaptcha').fill(captcha_texto)
                     await frame_locator.locator('#MainContent_btnVerify').click()
-                    await page.wait_for_timeout(2000)
+                    await page.wait_for_timeout(1200)
                     mensaje = (await frame_locator.locator('#MainContent_lblMessage').inner_text()).strip()
                     print(f"ℹ Mensaje captcha: {mensaje}")
                     if "bloqueado" in mensaje.lower() or "demasiados" in mensaje.lower():
@@ -260,17 +243,16 @@ async def consultar_ruaf(cedula, tipo_doc, consulta_id, fecha_expedicion=None):
                     if "Inválido" in mensaje or "Invalido" in mensaje:
                         print("❌ Captcha inválido, recargando...")
                         await frame_locator.locator('img[src*="Captcha"]').click()
-                        await asyncio.sleep(2)
+                        await page.wait_for_timeout(1000)
                         continue
                     if "Válido" in mensaje or "Valido" in mensaje:
                         print("✅ Captcha válido, consultando...")
                         await frame_locator.locator('#MainContent_btnConsultar').click()
                         export_btn_selector = 'a#ctl00_MainContent_rvConsulta_ctl09_ctl04_ctl00_ButtonLink'
-                        await frame_locator.locator(export_btn_selector).wait_for(timeout=25000)
+                        await frame_locator.locator(export_btn_selector).wait_for(state="visible", timeout=25000)
                         await frame_locator.locator(export_btn_selector).click()
-                        await asyncio.sleep(2)
                         pdf_link_selector = 'a.ActiveLink[title="PDF"]'
-                        await frame_locator.locator(pdf_link_selector).wait_for(timeout=15000)
+                        await frame_locator.locator(pdf_link_selector).wait_for(state="visible", timeout=15000)
                         async with page.expect_download() as descarga_info:
                             await frame_locator.locator(pdf_link_selector).click()
                         descarga = await descarga_info.value
@@ -295,7 +277,7 @@ async def consultar_ruaf(cedula, tipo_doc, consulta_id, fecha_expedicion=None):
                         return
                     print("⚠ Mensaje captcha no reconocido, reintentando...")
                     await frame_locator.locator('img[src*="Captcha"]').click()
-                    await asyncio.sleep(2)
+                    await page.wait_for_timeout(1000)
                 print("⚠ Fallo captcha en todos los intentos.")
                 await navegador.close()
         except Exception as e:

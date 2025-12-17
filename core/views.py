@@ -142,9 +142,60 @@ def uniq_preserve(iterable):
             seen.add(x)
     return out
 
-# Mapa de profesiones y bots a ejecutar
-import re
 
+# Mapa de profesiones y bots a ejecutar (alineado con el frontend)
+PROFESION_BOT_MAP = [
+    # Abogado/a
+    (re.compile(r"abogado/a|abogad[oa]", re.I), ["sirna_inscritos_png", "rama_abogado_certificado"]),
+
+    # Economista
+    (re.compile(r"economista", re.I), ["conalpe_consulta_inscritos", "conalpe_certificado"]),
+
+    # Psicólogo/a
+    (re.compile(r"psic[oó]logo/a|psic[oó]log[oa]", re.I), ["colpsic_verificacion_tarjetas", "colpsic_validar_documento"]),
+
+    # Bacteriólogo/a
+    (re.compile(r"bacteri[oó]logo/a|bacteri[oó]log[oa]", re.I), ["cnb_carnet_afiliacion", "cnb_consulta_matriculados"]),
+
+    # Biólogo/a
+    (re.compile(r"b[ií]ologo/a|b[ií]olog[oa]", re.I), ["biologia_consulta", "biologia_validacion_certificados"]),
+
+    # Químico/a
+    (re.compile(r"qu[ií]mico/a|qu[ií]mic[oa]", re.I), ["cpqcol_verificar", "cpqcol_antecedentes"]),
+
+    # Ingeniero/a Químico/a
+    (re.compile(r"ingeniero/a qu[ií]mico/a|ingenier[oa] qu[ií]mic[oa]", re.I), ["cpiq_validacion_matricula", "cpiq_validacion_tarjeta", "cpiq_certificado_vigencia", "cpiq_validacion_certificado_vigencia"]),
+
+    # Ingeniero/a de Petróleos
+    (re.compile(r"ingeniero/a de petr[oó]leos|ingenier[oa] de petr[oó]leos", re.I), ["cpip_verif_matricula"]),
+
+    # Topógrafo/a
+    (re.compile(r"top[oó]grafo/a|top[oó]graf[oa]", re.I), ["cpnt_vigenciapdf", "cpnt_vigencia_externa_form", "cpnt_consulta_licencia"]),
+
+    # Arquitecto/a
+    (re.compile(r"arquitecto/a|arquitect[oa]", re.I), ["cpnaa_matricula_arquitecto", "cpnaa_certificado_vigencia"]),
+
+    # Tecnólogo/a en Electricidad/Electrónica/Electromecánica
+    (re.compile(r"tecn[oó]logo/a en electricidad/electr[oó]nica/electromec[aá]nica|tecn[oó]log[oa]", re.I), ["conaltel_consulta_matriculados"]),
+
+    # Técnico/a Electricista
+    (re.compile(r"t[eé]cnico/a electricista|t[eé]cnic[oa] electricist[ae]", re.I), ["conte_consulta_matricula", "conte_consulta_vigencia"]),
+
+    # Ingeniero/a Eléctrico/Mecánico/Electrónico/Telecom/Metalúrgico/Aeronáutico/Nuclear/Electromecánico
+    (re.compile(r"ingeniero/a el[eé]ctrico/mec[aá]nico/electr[oó]nico/telecom/metal[uú]rgico/aeron[aá]utico/nuclear/electromec[aá]nico|ingenier[oa]", re.I), ["cp_validar_matricula", "cp_validar_certificado", "cp_certificado_busqueda", "colelectro_directorio"]),
+
+    # Ingeniero/a (genérico)
+    (re.compile(r"ingeniero/a|ingenier[oa]", re.I), ["copnia_certificado"]),
+
+    # Administrador/a de Empresas/Negocios
+    (re.compile(r"administrador/a de empresas/negocios|administrador[ae] de empresas", re.I), ["cpae_certificado"]),
+
+    # Administrador/a Ambiental
+    (re.compile(r"administrador/a ambiental|administrador[ae] ambiental", re.I), ["cpaa_generar_certificado"]),
+
+    # Contador/a
+    (re.compile(r"contador/a|contador[ae]", re.I), ["conpucol_verificacion_colegiados", "conpucol_certificados"]),
+]
 
 def bots_por_profesion(profesion: str) -> list[str]:
     p = _norm(profesion)
@@ -153,7 +204,6 @@ def bots_por_profesion(profesion: str) -> list[str]:
         if rx.search(p):
             sugeridos.extend(bots)
     return uniq_preserve(sugeridos)
-
 
 User = get_user_model()
 
@@ -416,79 +466,79 @@ BOTS_PREMIUM_FIJOS = ['policia_nacional',
                     'porvenir_cert_afiliacion',
                     'banco_proveedores_consulta_estados']
 PROFESION_BOT_MAP = [
-    # ABOGACÍA (SIRNA: Registro Nacional de Abogados)  — valor sugerido: "abogado(a)"
-    (re.compile(r"\babogad[oa]s?\b", re.I),
+    #ABOGACÍA (SIRNA: Registro Nacional de Abogados)  — valor sugerido: "abogado(a)"
+     (re.compile(r"\babogad[oa]s?\b", re.I),
      ["sirna_inscritos_png", "rama_abogado_certificado"]),
 
-    # ECONOMÍA (CONALPE)  — valor sugerido: "economista(s)"
-    (re.compile(r"\beconomistas?\b", re.I),
+     #ECONOMÍA (CONALPE)  — valor sugerido: "economista(s)"
+     (re.compile(r"\beconomistas?\b", re.I),
      ["conalpe_consulta_inscritos", "conalpe_certificado"]),
 
-    # PSICOLOGÍA (COLPSIC)  — valor sugerido: "psicólogo(a)"
-    # (re.compile(r"\bpsic(?:ó|o)log[oa]s?\b", re.I),
-    #  ["colpsic_verificacion_tarjetas", "colpsic_validar_documento"]),
+     #PSICOLOGÍA (COLPSIC)  — valor sugerido: "psicólogo(a)"
+     (re.compile(r"\bpsic(?:ó|o)log[oa]s?\b", re.I),
+      ["colpsic_verificacion_tarjetas", "colpsic_validar_documento"]),
 
-    # BACTERIOLOGÍA (CNB)  — valor sugerido: "bacteriólogo(a)"
-    # (re.compile(r"\bbacteriol(?:ó|o)g[oa]s?\b", re.I),
-    #  ["cnb_carnet_afiliacion", "cnb_consulta_matriculados"]),
+     #BACTERIOLOGÍA (CNB)  — valor sugerido: "bacteriólogo(a)"
+     (re.compile(r"\bbacteriol(?:ó|o)g[oa]s?\b", re.I),
+      ["cnb_carnet_afiliacion", "cnb_consulta_matriculados"]),
 
-    # BIOLOGÍA (Consejo Profesional de Biología)  — valor sugerido: "biólogo(a)"
-    # (re.compile(r"\bbiol(?:ó|o)g[oa]s?\b", re.I),
-    #  ["biologia_consulta", "biologia_validacion_certificados"]),
+     #BIOLOGÍA (Consejo Profesional de Biología)  — valor sugerido: "biólogo(a)"
+     (re.compile(r"\bbiol(?:ó|o)g[oa]s?\b", re.I),
+      ["biologia_consulta", "biologia_validacion_certificados"]),
 
-    # QUÍMICA (CPQCOL)  — valor sugerido: "químico(a)"
-    # (re.compile(r"\bqu(?:í|i)mic[oa]s?\b", re.I),
-    #  ["cpqcol_verificar", "cpqcol_antecedentes"]),
+     #QUÍMICA (CPQCOL)  — valor sugerido: "químico(a)"
+     (re.compile(r"\bqu(?:í|i)mic[oa]s?\b", re.I),
+      ["cpqcol_verificar", "cpqcol_antecedentes"]),
 
-    # INGENIERÍA QUÍMICA (CPIQ)  — valor sugerido: "ingeniero(a) químico(a)"
-    # (re.compile(r"\bingenier[oa]s?\s+qu(?:í|i)mic[oa]s?\b", re.I),
-    #  ["cpiq_validacion_matricula", "cpiq_validacion_tarjeta",
-    #   "cpiq_certificado_vigencia", "cpiq_validacion_certificado_vigencia"]),
+     #INGENIERÍA QUÍMICA (CPIQ)  — valor sugerido: "ingeniero(a) químico(a)"
+     (re.compile(r"\bingenier[oa]s?\s+qu(?:í|i)mic[oa]s?\b", re.I),
+      ["cpiq_validacion_matricula", "cpiq_validacion_tarjeta",
+       "cpiq_certificado_vigencia", "cpiq_validacion_certificado_vigencia"]),
 
-    # INGENIERÍA DE PETRÓLEOS (CPIP)  — valor sugerido: "ingeniero(a) de petróleos"
-    # (re.compile(r"\bingenier[oa]s?\s+de\s+petr(?:ó|o)leos?\b", re.I),
-    #  ["cpip_verif_matricula"]),
+     #INGENIERÍA DE PETRÓLEOS (CPIP)  — valor sugerido: "ingeniero(a) de petróleos"
+     (re.compile(r"\bingenier[oa]s?\s+de\s+petr(?:ó|o)leos?\b", re.I),
+      ["cpip_verif_matricula"]),
 
-    # TOPOGRAFÍA (CPNT)  — valor sugerido: "topógrafo(a)"
-    # (re.compile(r"\btop(?:ó|o)graf[oa]s?\b", re.I),
-    #  ["cpnt_vigenciapdf", "cpnt_vigencia_externa_form", "cpnt_consulta_licencia"]),
+     #TOPOGRAFÍA (CPNT)  — valor sugerido: "topógrafo(a)"
+     (re.compile(r"\btop(?:ó|o)graf[oa]s?\b", re.I),
+      ["cpnt_vigenciapdf", "cpnt_vigencia_externa_form", "cpnt_consulta_licencia"]),
 
-    # ARQUITECTURA (CPNAA)  — valor sugerido: "arquitecto(a)"
-    # (re.compile(r"\barquitect[oa]s?\b", re.I),
-    #  ["cpnaa_matricula_arquitecto", "cpnaa_certificado_vigencia"]),
+     #ARQUITECTURA (CPNAA)  — valor sugerido: "arquitecto(a)"
+     (re.compile(r"\barquitect[oa]s?\b", re.I),
+      ["cpnaa_matricula_arquitecto", "cpnaa_certificado_vigencia"]),
 
-    # TECNÓLOGOS (CONALTEL)  — valor sugerido: "tecnólogo(a)"
-    # (re.compile(r"\btecn(?:ó|o)log[oa]s?\b", re.I),
-    #  ["conaltel_consulta_matriculados"]),
+     #TECNÓLOGOS (CONALTEL)  — valor sugerido: "tecnólogo(a)"
+     (re.compile(r"\btecn(?:ó|o)log[oa]s?\b", re.I),
+      ["conaltel_consulta_matriculados"]),
 
-    # TÉCNICOS ELECTRICISTAS (CONTE)  — valor sugerido: "técnico(a) electricista"
-    # (re.compile(r"\bt[ée]cnic[oa]s?\s+electricist[ae]s?\b", re.I),
-    #  ["conte_consulta_matricula", "conte_consulta_vigencia"]),
+     #TÉCNICOS ELECTRICISTAS (CONTE)  — valor sugerido: "técnico(a) electricista"
+     (re.compile(r"\bt[ée]cnic[oa]s?\s+electricist[ae]s?\b", re.I),
+     ["conte_consulta_matricula", "conte_consulta_vigencia"]),
 
-    # INGENIERÍAS VARIAS (Consejo Profesional Nacional) — valor sugerido: "ingeniero(a)"
-    # Nota: comparte patrón con el fallback; deja este antes para que tenga prioridad.
-    # (re.compile(r"\bingenier[oa]s?\b", re.I),
-    #  ["cp_validar_matricula", "cp_validar_certificado", "cp_certificado_busqueda", "colelectro_directorio"]),
+     #INGENIERÍAS VARIAS (Consejo Profesional Nacional) — valor sugerido: "ingeniero(a)"
+     #Nota: comparte patrón con el fallback; deja este antes para que tenga prioridad.
+     (re.compile(r"\bingenier[oa]s?\b", re.I),
+      ["cp_validar_matricula", "cp_validar_certificado", "cp_certificado_busqueda", "colelectro_directorio"]),
 
-    # INGENIERÍA (genérico/fallback) → COPNIA  — valor sugerido: "ingeniero(a)"
+     #INGENIERÍA (genérico/fallback) → COPNIA  — valor sugerido: "ingeniero(a)"
     (re.compile(r"\bingenier[oa]s?\b", re.I),
      ["copnia_certificado"]),
 
-    # ADMINISTRACIÓN DE EMPRESAS / NEGOCIOS (CPAE)  — valor sugerido: "administrador(a) de empresas"
+     #ADMINISTRACIÓN DE EMPRESAS / NEGOCIOS (CPAE)  — valor sugerido: "administrador(a) de empresas"
     (re.compile(r"\badministrador[ae]s?\s+de\s+empresas?\b", re.I),
      ["cpae_certificado"]),
      
-    # ADMINISTRACIÓN PUBLICO (CPAA)  — valor sugerido: "administrador(a) publico"
-    (re.compile(r"\badministrador[ae]s?\s+publico(?:es)?\b", re.I),
+     #ADMINISTRACIÓN PUBLICO (CPAA)  — valor sugerido: "administrador(a) publico"
+     (re.compile(r"\badministrador[ae]s?\s+publico(?:es)?\b", re.I),
      ["ccap_validate_identity"]),
 
-    # ADMINISTRACIÓN AMBIENTAL (CPAA)  — valor sugerido: "administrador(a) ambiental"
-    (re.compile(r"\badministrador[ae]s?\s+ambiental(?:es)?\b", re.I),
+     #ADMINISTRACIÓN AMBIENTAL (CPAA)  — valor sugerido: "administrador(a) ambiental"
+     (re.compile(r"\badministrador[ae]s?\s+ambiental(?:es)?\b", re.I),
      ["cpaa_generar_certificado"]),
 
-    # CONTADURÍA (CONPUCOL)  — valor sugerido: "contador(a)"
-    # (re.compile(r"\bcontador[ae]s?\b", re.I),
-    #  ["conpucol_verificacion_colegiados", "conpucol_certificados"]),
+     #CONTADURÍA (CONPUCOL)  — valor sugerido: "contador(a)"
+     (re.compile(r"\bcontador[ae]s?\b", re.I),
+     ["conpucol_verificacion_colegiados", "conpucol_certificados"]),
 ]
 
 @api_view(["POST"])
@@ -713,16 +763,15 @@ def api_consultar(request):
 
         bots_profesion = bots_por_profesion(profesion)
 
+
         # ---------------------------------------------
-        # Enrutamiento por "contratista" basado en parámetros (NUEVO)
+        # Enrutamiento por "contratista" basado en parámetros (ACTUALIZADO)
+        # Ejecuta bots de colegio regulador según profesión + bots predeterminados
         # ---------------------------------------------
         if es_contratista:
-            lista_final = uniq_preserve(
-                (BOTS_CONTRATISTA_FIJOS or []) +
-                (bots_profesion or [])
-            )
+            lista_final = uniq_preserve((bots_profesion or []) + (BOTS_CONTRATISTA_FIJOS or []))
             if not lista_final:
-                lista_final = BOTS_CONTRATISTA_FIJOS
+                return Response({"error": "No hay bots configurados para la profesión seleccionada ni predeterminados."}, status=status.HTTP_400_BAD_REQUEST)
             procesar_consulta_contratista_por_nombres.delay(consulta.id, datos, lista_final)
         else:
             if lista_nombres:
