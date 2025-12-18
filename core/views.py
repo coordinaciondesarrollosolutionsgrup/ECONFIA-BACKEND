@@ -463,6 +463,9 @@ BOTS_PREMIUM_FIJOS = ['policia_nacional',
                     "ruaf",
                     'secop_consulta_aacs',
                     'colpensiones_rpm',
+                    'skanfia_certificados',
+                    'colpensiones_pila',
+                    'colfondo_consulta',
                     'porvenir_cert_afiliacion',
                     'banco_proveedores_consulta_estados']
 PROFESION_BOT_MAP = [

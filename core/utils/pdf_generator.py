@@ -1,8 +1,10 @@
 import io
+
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.utils import ImageReader
 from PyPDF2 import PdfMerger
 from PIL import Image as PILImage
 from django.conf import settings
@@ -16,20 +18,17 @@ def generar_pdf_consolidado(resultados, consulta_id):
 
     consulta = Consulta.objects.select_related('candidato').get(id=consulta_id)
     candidato = consulta.candidato
-    static_img = os.path.join(settings.STATIC_ROOT, "img")
-    logo_path = os.path.join(static_img, "logo.jpg")
+    BASE_STATIC_IMG = os.path.join(settings.BASE_DIR, "core", "static", "img")
+    logo_path = os.path.join(BASE_STATIC_IMG, "logo-removebg-preview.png")
+    print(f"[PDF] Ruta logo: {logo_path}")
+    print(f"[PDF] Ruta logo: {logo_path}")
 
     styles = getSampleStyleSheet()
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    buffer_pdf_base = io.BytesIO()
+    doc = SimpleDocTemplate(buffer_pdf_base, pagesize=A4)
     elements = []
 
-    # --- Logo ---
-    if os.path.exists(logo_path):
-        elements.append(Image(logo_path, width=100, height=100))
-    elements.append(Spacer(1, 12))
-
-    # --- Datos del candidato ---
+    # --- Solo texto: datos del candidato y tabla ---
     datos = f"""
     <b>{candidato.nombre} {candidato.apellido}</b><br/>
     Cédula: {candidato.cedula}<br/>
@@ -41,39 +40,6 @@ def generar_pdf_consolidado(resultados, consulta_id):
     elements.append(Paragraph(datos, styles["Normal"]))
     elements.append(Spacer(1, 12))
 
-    # --- Imagen del candidato según sexo/riesgo ---
-    if getattr(candidato, "sexo", "").lower() in ["femenino", "f", "mujer"]:
-        foto_path = os.path.join(static_img, "placeholder_femenino_gris.png")
-    else:
-        foto_path = os.path.join(static_img, "placeholder_verde.png")
-    if not os.path.exists(foto_path):
-        foto_path = os.path.join(static_img, "placeholder.png")
-    if os.path.exists(foto_path):
-        elements.append(Image(foto_path, width=100, height=100))
-        elements.append(Spacer(1, 12))
-
-    # --- QR (si existe) ---
-    if hasattr(consulta, "consolidado") and consulta.consolidado and getattr(consulta.consolidado, "qr", None):
-        qr_path = consulta.consolidado.qr.path
-        if os.path.exists(qr_path):
-            elements.append(Image(qr_path, width=100, height=100))
-            elements.append(Spacer(1, 12))
-
-    # --- Matriz de calor y bubble chart (usando funciones reales) ---
-    # Matriz de calor
-    mapa_b64 = generar_mapa_calor_interno(consulta_id)
-    mapa_img = BytesIO(base64.b64decode(mapa_b64))
-    elements.append(Paragraph("<b>Mapa de calor</b>", styles["Heading3"]))
-    elements.append(Image(mapa_img, width=250, height=180))
-    elements.append(Spacer(1, 12))
-    # Bubble chart
-    bubble_b64 = generar_bubble_chart_interno(consulta_id)
-    bubble_img = BytesIO(base64.b64decode(bubble_b64))
-    elements.append(Paragraph("<b>Bubble chart</b>", styles["Heading3"]))
-    elements.append(Image(bubble_img, width=250, height=180))
-    elements.append(Spacer(1, 12))
-
-    # --- Tabla de resultados ---
     elements.append(Paragraph("<b>Resultados</b>", styles["Heading2"]))
     data = [["Fuente", "Tipo", "Estado", "Score", "Mensaje"]]
     for r in resultados:
@@ -88,14 +54,96 @@ def generar_pdf_consolidado(resultados, consulta_id):
     ]))
     elements.append(table)
 
-    # --- Capturas de imágenes de los resultados (si existen) ---
+    doc.build(elements)
+    buffer_pdf_base.seek(0)
+
+    # --- Utilidad: imagen a PDF (Pillow) ---
+    def imagen_a_pdf_buffer(path_img):
+        img = PILImage.open(path_img).convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="PDF", resolution=150)
+        buf.seek(0)
+        return buf
+
+    # --- Utilidad: imagen base64 a PDF (Pillow) ---
+    def b64img_a_pdf_buffer(b64data):
+        img = PILImage.open(BytesIO(base64.b64decode(b64data))).convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="PDF", resolution=150)
+        buf.seek(0)
+        return buf
+
+    pdf_merger = PdfMerger()
+    pdf_merger.append(buffer_pdf_base)
+
+    # --- Logo ---
+    if os.path.exists(logo_path):
+        print(f"[PDF] Logo encontrado y agregado: {logo_path}")
+        pdf_merger.append(imagen_a_pdf_buffer(logo_path))
+    else:
+        print(f"[PDF] Logo NO encontrado: {logo_path}")
+
+    # --- Avatar según nivel y sexo ---
+    sexo = (getattr(candidato, "sexo", "") or "").lower()
+    if sexo in ["femenino", "f", "mujer"]:
+        foto = "placeholder_femenino_gris.png"
+    elif sexo in ["masculino", "m", "hombre"]:
+        foto = "placeholder_verde.png"
+    else:
+        foto = "placeholder.png"
+    foto_path = os.path.join(BASE_STATIC_IMG, foto)
+    print(f"[PDF] Ruta avatar: {foto_path}")
+    if os.path.exists(foto_path):
+        print(f"[PDF] Avatar encontrado y agregado: {foto_path}")
+        pdf_merger.append(imagen_a_pdf_buffer(foto_path))
+    else:
+        print(f"[PDF] Avatar NO encontrado: {foto_path}")
+
+    # --- QR (si existe) ---
+    if hasattr(consulta, "consolidado") and consulta.consolidado and getattr(consulta.consolidado, "qr", None):
+        qr_path = consulta.consolidado.qr.path
+        if os.path.exists(qr_path):
+            print(f"[PDF] QR encontrado y agregado: {qr_path}")
+            pdf_merger.append(imagen_a_pdf_buffer(qr_path))
+        else:
+            print(f"[PDF] QR NO encontrado: {qr_path}")
+
+    # --- Matriz de calor y bubble chart (usando funciones reales) ---
+    mapa_b64 = generar_mapa_calor_interno(consulta_id)
+    print(f"[PDF] matriz de calor base64: {len(mapa_b64) if mapa_b64 else 0} bytes")
+    if mapa_b64:
+        try:
+            pdf_merger.append(b64img_a_pdf_buffer(mapa_b64))
+            print("[PDF] Matriz de calor agregada al PDF")
+        except Exception as e:
+            print(f"[PDF] ERROR agregando matriz de calor: {e}")
+    else:
+        print("[PDF] matriz de calor VACÍA o nula")
+
+    bubble_b64 = generar_bubble_chart_interno(consulta_id)
+    print(f"[PDF] bubble chart base64: {len(bubble_b64) if bubble_b64 else 0} bytes")
+    if bubble_b64:
+        try:
+            pdf_merger.append(b64img_a_pdf_buffer(bubble_b64))
+            print("[PDF] Bubble chart agregado al PDF")
+        except Exception as e:
+            print(f"[PDF] ERROR agregando bubble chart: {e}")
+    else:
+        print("[PDF] bubble chart VACÍO o nulo")
+
+    # --- Capturas de imágenes de los resultados ---
     for r in resultados:
         archivo = r.get("archivo")
-        if archivo and os.path.exists(archivo):
-            elements.append(Paragraph(f"Captura de {r['fuente']}", styles["Heading3"]))
-            elements.append(Image(archivo, width=250, height=180))
-            elements.append(Spacer(1, 12))
+        if archivo:
+            archivo_abs = os.path.join(settings.MEDIA_ROOT, archivo)
+            if os.path.exists(archivo_abs):
+                print(f"[PDF] Captura encontrada y agregada: {archivo_abs}")
+                pdf_merger.append(imagen_a_pdf_buffer(archivo_abs))
+            else:
+                print(f"[PDF] Captura NO encontrada: {archivo_abs}")
 
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
+    final_buffer = io.BytesIO()
+    pdf_merger.write(final_buffer)
+    pdf_merger.close()
+    final_buffer.seek(0)
+    return final_buffer
