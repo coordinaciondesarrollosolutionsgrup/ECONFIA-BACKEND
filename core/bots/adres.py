@@ -283,23 +283,15 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
             if pagina_resultado is None:
                 pagina_resultado = pagina
 
+
             # =================================================================
-            #                      PDF + SCREENSHOT
+            #                      SOLO SCREENSHOT
             # =================================================================
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             base_name = f"{nombre_sitio}_{cedula}_{timestamp}"
 
-            pdf_path = os.path.join(absolute_folder, f"{base_name}.pdf")
             img_path = os.path.join(absolute_folder, f"{base_name}.png")
             relative_path = os.path.join(relative_folder, f"{base_name}.png")
-
-            # Opcional: evitar generar artefactos pesados en pipelines (setear DISABLE_ARTIFACTS=true)
-            disable_artifacts = os.environ.get('DISABLE_ARTIFACTS', '').lower() in ['1','true','yes']
-            if not disable_artifacts:
-                try:
-                    await pagina_resultado.pdf(path=pdf_path, format="Letter")
-                except:
-                    pass
 
             try:
                 # tomar screenshot más ligera cuando se pida (full_page puede ser lento)
