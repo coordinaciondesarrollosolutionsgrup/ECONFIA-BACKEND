@@ -293,6 +293,8 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
             img_path = os.path.join(absolute_folder, f"{base_name}.png")
             relative_path = os.path.join(relative_folder, f"{base_name}.png")
 
+            screenshot_ok = False
+            screenshot_error = None
             try:
                 # tomar screenshot más ligera cuando se pida (full_page puede ser lento)
                 full_page_flag = not os.environ.get('DISABLE_SCREENSHOT_FULLPAGE', '').lower() in ['1','true','yes']
@@ -300,11 +302,25 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
                     await pagina_resultado.screenshot(path=img_path, full_page=True)
                 else:
                     await pagina_resultado.screenshot(path=img_path, full_page=False)
-            except:
+                screenshot_ok = os.path.exists(img_path) and os.path.getsize(img_path) > 0
+            except Exception as e:
+                screenshot_error = str(e)
                 try:
                     await pagina_resultado.screenshot(path=img_path)
-                except:
-                    pass
+                    screenshot_ok = os.path.exists(img_path) and os.path.getsize(img_path) > 0
+                except Exception as e2:
+                    screenshot_error = screenshot_error + ' | ' + str(e2)
+            # Si el screenshot falló, guardar error en la BD y salir
+            if not screenshot_ok:
+                await navegador.close()
+                fuente = await _get_fuente_by_nombre(nombre_sitio)
+                await _crear_resultado_error(
+                    consulta_id,
+                    fuente,
+                    f"No se pudo generar la captura de pantalla en ADRES. Error: {screenshot_error}"
+                )
+                return
+
 
             # =================================================================
             #                    EXTRAER MENSAJE Y GUARDAR BD
