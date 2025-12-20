@@ -3,6 +3,8 @@ from datetime import datetime
 from playwright.async_api import async_playwright
 from django.conf import settings
 from asgiref.sync import sync_to_async
+import fitz  # PyMuPDF
+import os
 import traceback
 
 from core.models import Consulta, Resultado, Fuente
@@ -195,17 +197,9 @@ async def _extraer_mensaje_y_score(pagina):
 async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
     max_intentos = 10
 
-    import time
-    def log_tiempo(msg, t0):
-        print(f"[BOT ADRES] {msg}: {time.time() - t0:.2f}s")
-
     try:
-        t_inicio = time.time()
-        log_tiempo("Inicio consulta_adres", t_inicio)
         await sync_to_async(Consulta.objects.get)(id=consulta_id)
-        log_tiempo("Consulta.objects.get", t_inicio)
         fuente = await _get_fuente_by_nombre(nombre_sitio)
-        log_tiempo("Fuente obtenida", t_inicio)
 
         # Leer variables de entorno para headless y slow_mo
         headless_env = os.environ.get("ADRES_HEADLESS", "true").lower()
@@ -217,20 +211,14 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
             slow_mo = 0
 
         async with async_playwright() as p:
-            log_tiempo("Playwright iniciado", t_inicio)
             navegador = await p.chromium.launch(headless=headless_flag, slow_mo=slow_mo)
-            log_tiempo("Navegador lanzado", t_inicio)
             contexto = await navegador.new_context()
-            log_tiempo("Contexto creado", t_inicio)
             pagina = await contexto.new_page()
-            log_tiempo("Página creada", t_inicio)
 
             await pagina.goto(url, wait_until="networkidle")
-            log_tiempo("Página cargada", t_inicio)
 
             # ───── Obtener iframe del formulario ─────
             form_ctx = await get_iframe_form(pagina)
-            log_tiempo("Iframe obtenido", t_inicio)
             if not form_ctx:
                 form_ctx = pagina  # fallback
 
@@ -240,24 +228,20 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
                 if sel_tipo:
                     await sel_tipo.select_option(TIPO_DOC_MAP.get(tipo_doc.upper(), tipo_doc.upper()))
                     await form_ctx.wait_for_timeout(500)
-                log_tiempo("Tipo documento seleccionado", t_inicio)
             except:
                 pass
 
             # ───── Rellenar número ─────
             inp_num = await localizar_input_num(form_ctx)
-            log_tiempo("Input número localizado", t_inicio)
             if not inp_num:
                 raise Exception("No se encontró input del número de documento.")
 
             await inp_num.fill(cedula)
-            log_tiempo("Número de documento rellenado", t_inicio)
 
             # ───── Preparar carpetas ─────
             relative_folder = os.path.join("resultados", str(consulta_id))
             absolute_folder = os.path.join(settings.MEDIA_ROOT, relative_folder)
             os.makedirs(absolute_folder, exist_ok=True)
-            log_tiempo("Carpetas preparadas", t_inicio)
 
             pagina_resultado = None
 
@@ -265,7 +249,6 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
             #                        BUCLE CAPTCHA
             # =================================================================
             for intento in range(1, max_intentos + 1):
-                log_tiempo(f"Intento captcha {intento}", t_inicio)
                 captcha_img = await localizar_img_captcha(form_ctx)
                 captcha_path = os.path.join(absolute_folder, "captcha_tmp.png")
 
@@ -273,10 +256,8 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
                     await captcha_img.screenshot(path=captcha_path)
                 else:
                     await form_ctx.screenshot(path=captcha_path)
-                log_tiempo("Captcha imagen guardada", t_inicio)
 
                 captcha_text = await resolver_captcha_imagen(captcha_path)
-                log_tiempo("Captcha resuelto", t_inicio)
 
                 if not captcha_text:
                     await form_ctx.wait_for_timeout(1200)
@@ -286,7 +267,6 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
                     await form_ctx.fill('input#Capcha_CaptchaTextBox', captcha_text)
                 except:
                     await form_ctx.fill('input[name="Capcha$CaptchaTextBox"]', captcha_text)
-                log_tiempo("Captcha rellenado", t_inicio)
 
                 # ───── Click y esperar popup ─────
                 try:
@@ -294,76 +274,74 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
                         await form_ctx.click('input#btnConsultar')
                     pagina_resultado = await pop.value
                     await pagina_resultado.wait_for_load_state("networkidle")
-                    log_tiempo("Popup resultado cargado", t_inicio)
                     break
                 except:
                     # si no hubo popup, revisar páginas
                     pages = contexto.pages
                     if len(pages) > 1:
                         pagina_resultado = pages[-1]
-                        log_tiempo("Resultado por páginas alternas", t_inicio)
                         break
 
             if pagina_resultado is None:
                 pagina_resultado = pagina
-            log_tiempo("Página resultado lista", t_inicio)
 
 
             # =================================================================
-            #                      SOLO SCREENSHOT
+            #                      PDF + IMAGEN (fitz)
             # =================================================================
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             base_name = f"{nombre_sitio}_{cedula}_{timestamp}"
 
+            pdf_path = os.path.join(absolute_folder, f"{base_name}.pdf")
             img_path = os.path.join(absolute_folder, f"{base_name}.png")
             relative_path = os.path.join(relative_folder, f"{base_name}.png")
 
-            screenshot_ok = False
-            screenshot_error = None
-            t_screenshot = time.time()
-            try:
-                # tomar screenshot más ligera cuando se pida (full_page puede ser lento)
-                full_page_flag = not os.environ.get('DISABLE_SCREENSHOT_FULLPAGE', '').lower() in ['1','true','yes']
-                if full_page_flag:
-                    await pagina_resultado.screenshot(path=img_path, full_page=True)
-                else:
-                    await pagina_resultado.screenshot(path=img_path, full_page=False)
-                screenshot_ok = os.path.exists(img_path) and os.path.getsize(img_path) > 0
-                log_tiempo("Screenshot tomada", t_screenshot)
-            except Exception as e:
-                screenshot_error = str(e)
+            # Opcional: evitar generar artefactos pesados en pipelines (setear DISABLE_ARTIFACTS=true)
+            disable_artifacts = os.environ.get('DISABLE_ARTIFACTS', '').lower() in ['1','true','yes']
+            pdf_generado = False
+            if not disable_artifacts:
                 try:
-                    await pagina_resultado.screenshot(path=img_path)
-                    screenshot_ok = os.path.exists(img_path) and os.path.getsize(img_path) > 0
-                    log_tiempo("Screenshot tomada (fallback)", t_screenshot)
-                except Exception as e2:
-                    screenshot_error = screenshot_error + ' | ' + str(e2)
-            # Si el screenshot falló, guardar error en la BD y salir
-            if not screenshot_ok:
-                log_tiempo(f"Screenshot falló: {screenshot_error}", t_screenshot)
-                await navegador.close()
-                fuente = await _get_fuente_by_nombre(nombre_sitio)
-                await _crear_resultado_error(
-                    consulta_id,
-                    fuente,
-                    f"No se pudo generar la captura de pantalla en ADRES. Error: {screenshot_error}"
-                )
-                return
+                    await pagina_resultado.pdf(path=pdf_path, format="Letter")
+                    pdf_generado = True
+                except:
+                    pdf_generado = False
 
+            # Si el PDF se generó, convertirlo a imagen usando fitz
+            imagen_generada = False
+            if pdf_generado and os.path.exists(pdf_path):
+                try:
+                    doc = fitz.open(pdf_path)
+                    page = doc.load_page(0)
+                    pix = page.get_pixmap(dpi=150)
+                    pix.save(img_path)
+                    doc.close()
+                    imagen_generada = True
+                except Exception as e:
+                    imagen_generada = False
+
+            # Si no se pudo generar la imagen desde el PDF, usar screenshot como fallback
+            if not imagen_generada:
+                try:
+                    full_page_flag = not os.environ.get('DISABLE_SCREENSHOT_FULLPAGE', '').lower() in ['1','true','yes']
+                    if full_page_flag:
+                        await pagina_resultado.screenshot(path=img_path, full_page=True)
+                    else:
+                        await pagina_resultado.screenshot(path=img_path, full_page=False)
+                except:
+                    try:
+                        await pagina_resultado.screenshot(path=img_path)
+                    except:
+                        pass
 
             # =================================================================
             #                    EXTRAER MENSAJE Y GUARDAR BD
             # =================================================================
-            t_msg = time.time()
             try:
                 mensaje_final, score_final = await _extraer_mensaje_y_score(pagina_resultado)
-                log_tiempo("Mensaje extraído", t_msg)
             except:
                 mensaje_final, score_final = "Resultado obtenido.", 2
-                log_tiempo("Mensaje extraído (fallback)", t_msg)
 
             await navegador.close()
-            log_tiempo("Navegador cerrado", t_inicio)
 
         await _crear_resultado_ok_con_score(
             consulta_id,
@@ -372,7 +350,6 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
             mensaje_final,
             score_final
         )
-        log_tiempo("Resultado guardado en BD", t_inicio)
 
     except Exception as e:
         tb = traceback.format_exc()
