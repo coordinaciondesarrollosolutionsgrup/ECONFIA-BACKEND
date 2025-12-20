@@ -1,9 +1,6 @@
-
 import os
 import asyncio
 import itertools
-import inspect
-from playwright.async_api import async_playwright
 from django.conf import settings
 from celery import shared_task
 from .models import Consulta, Resultado
@@ -14,28 +11,13 @@ import requests
 import httpx
 from time import perf_counter
 
-
-
-# General bot runner with hard timeout (customizable)
-async def run_bot(bot, timeout=90):
-    start = perf_counter()
+async def run_bot(bot):
     try:
-        func = bot["func"]
-        kwargs = dict(bot.get("kwargs", {}))
-        sig = inspect.signature(func)
-        if "browser" in sig.parameters:
-            kwargs["browser"] = bot.get("browser")
-        await asyncio.wait_for(
-            func(**kwargs),
-            timeout=timeout
-        )
-    except asyncio.TimeoutError:
-        print(f"⛔ BOT {bot.get('name', func.__name__)} cancelado por timeout ({timeout}s)")
+        # El bot ya guarda sus propios resultados en la BD
+        await bot['func'](**bot['kwargs'])
     except Exception as e:
-        print(f"❌ Error en bot {bot.get('name', func.__name__)}: {e}")
-    finally:
-        elapsed = perf_counter() - start
-        print(f"[BOT] {bot.get('name', func.__name__)} → {elapsed:.2f}s")
+        # Guardar error o hacer log
+        print(f"Error en bot {bot['func'].__name__}: {e}")
   
 def chunked(iterable, size):
     """Divide un iterable en listas de tamaño 'size'."""
@@ -48,6 +30,12 @@ def chunked(iterable, size):
 
 @shared_task
 def procesar_consulta(consulta_id, datos):
+
+    async def run_bot(bot):
+        try:
+            await bot['func'](**bot['kwargs'])
+        except Exception as e:
+            print(f"Error en bot {bot['func'].__name__}: {e}")
 
     def chunked(iterable, size):
         it = iter(iterable)
@@ -74,91 +62,20 @@ def procesar_consulta(consulta_id, datos):
 
     datos.setdefault('rutas', {})
 
-
-
-    # --- SEPARACIÓN REAL DE BOTS RÁPIDOS Y LENTOS ---
-    SLOW_BOT_NAMES = {
-        "ruaf", "contraloria", "simit", "porvenir", "runt", "inpec", "sisben",
-        "antecedentes_fiscales", "procuraduria", "policia_nacional", "movilidad_bogota"
-    }
-    bot_configs_all = get_bot_configs(consulta_id, datos)
-    FAST_BOTS = []
-    SLOW_BOTS = []
-    for bot in bot_configs_all:
-        if bot["name"] in SLOW_BOT_NAMES:
-            SLOW_BOTS.append(bot)
-        else:
-            FAST_BOTS.append(bot)
-
-    # --- SOLO FAST_BOTS EN EL FLUJO PRINCIPAL ---
-    total_start = perf_counter()
-    async def main_bots():
-        try:
-            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '60'))
-        except Exception:
-            batch_size = 60
-        print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            for batch in chunked(FAST_BOTS, batch_size):
-                batch_start = perf_counter()
-                await asyncio.gather(
-                    *(run_bot({**bot, "browser": browser}) for bot in batch)
-                )
-                print(f"[BATCH] terminó en {perf_counter() - batch_start:.2f}s")
-            await browser.close()
-
-    async_to_sync(main_bots)()
-    print(f"[CONSULTA {consulta_id}] TOTAL → {perf_counter() - total_start:.2f}s")
-
-    # --- EJECUTAR LOS LENTOS EN OTRA TASK CELERY (DE VERDAD) ---
-    for bot in SLOW_BOTS:
-        ejecutar_bot_lento.delay(bot["name"], consulta_id, datos)
-        print(f"[BACKGROUND] Bot lento '{bot['name']}' programado para ejecución en background")
-@shared_task
-
-
-def ejecutar_bot_lento(bot_name, consulta_id, datos):
-    """Ejecuta un bot lento en background con timeout duro."""
-    import asyncio, inspect
-    from time import perf_counter
-    from playwright.async_api import async_playwright
-    from .models import Consulta
-    from .bots.bot_configs import get_bot_configs
-
-    # Obtener la instancia de Consulta
-    consulta = Consulta.objects.get(id=consulta_id)
-
-    # Reconstruir el bot usando el nombre
     bot_configs = get_bot_configs(consulta_id, datos)
-    bot = next((b for b in bot_configs if b["name"] == bot_name), None)
-    if not bot:
-        print(f"❌ No se encontró configuración para el bot '{bot_name}' en consulta {consulta_id}")
-        return
 
-    async def run():
-        start = perf_counter()
+    async def main_bots():
+        # Corre en paralelo por lotes. Tamaño configurable vía env `BOT_BATCH_SIZE`.
         try:
-            func = bot["func"]
-            kwargs = dict(bot.get("kwargs", {}))
-            sig = inspect.signature(func)
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                if "browser" in sig.parameters:
-                    kwargs["browser"] = browser
-                await asyncio.wait_for(
-                    func(**kwargs),
-                    timeout=120
-                )
-                await browser.close()
-        except asyncio.TimeoutError:
-            print(f"⛔ BOT {bot.get('name', func.__name__)} cancelado por timeout (120s)")
-        except Exception as e:
-            print(f"❌ Error en bot {bot.get('name', func.__name__)}: {e}")
-        finally:
-            elapsed = perf_counter() - start
-            print(f"[BOT-LENTO] {bot.get('name', func.__name__)} → {elapsed:.2f}s")
-    asyncio.run(run())
+            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '100'))
+        except Exception:
+            batch_size = 100
+        print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
+        for batch in chunked(bot_configs, batch_size):
+            await asyncio.gather(*(run_bot(bot) for bot in batch))
+
+    # Ejecutar bots (paralelo por lotes)
+    async_to_sync(main_bots)()
 
     consulta.estado = 'completado'
     consulta.save()
@@ -192,6 +109,12 @@ def ejecutar_bot_lento(bot_name, consulta_id, datos):
         
 @shared_task
 def procesar_consulta_por_nombres(consulta_id, datos, lista_nombres):
+    async def run_bot(bot):
+        try:
+            await bot['func'](**bot['kwargs'])
+        except Exception as e:
+            print(f"Error en bot {bot['func'].__name__}: {e}")
+
     def chunked(iterable, size):
         it = iter(iterable)
         while True:
@@ -223,25 +146,12 @@ def procesar_consulta_por_nombres(consulta_id, datos, lista_nombres):
     # Filtramos por lista de nombres
     bot_configs = [bot for bot in bot_configs if bot["name"] in lista_nombres]
 
-    total_start = perf_counter()
     async def main_bots():
-        try:
-            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '30'))
-        except Exception:
-            batch_size = 30
-        print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            for batch in chunked(bot_configs, batch_size):
-                batch_start = perf_counter()
-                await asyncio.gather(
-                    *(run_bot({**bot, "browser": browser}) for bot in batch)
-                )
-                print(f"[BATCH] terminó en {perf_counter() - batch_start:.2f}s")
-            await browser.close()
+        for batch in chunked(bot_configs, 50):
+            await asyncio.gather(*(run_bot(bot) for bot in batch))
 
+    # Ejecutar solo los bots filtrados
     async_to_sync(main_bots)()
-    print(f"[CONSULTA {consulta_id}] TOTAL → {perf_counter() - total_start:.2f}s")
 
     consulta.estado = 'completado'
     consulta.save()
@@ -462,7 +372,7 @@ def procesar_consulta_contratista_por_nombres(consulta_id, datos, lista_nombres)
 
     # 3) Ejecutar en lotes (concurrency control)
     async def main_bots():
-        for batch in chunked(bot_configs, 100):
+        for batch in chunked(bot_configs, 50):
             await asyncio.gather(*(run_bot(b) for b in batch))
 
     async_to_sync(main_bots)()
