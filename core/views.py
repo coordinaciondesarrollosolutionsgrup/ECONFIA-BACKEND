@@ -804,13 +804,44 @@ def descargar_pdf(request, consulta_id):
         for r in resultados_qs
     ]
 
-    # Generar PDF en memoria (BytesIO)
-    pdf_buffer = generar_pdf_consolidado(resultados, consulta_id)
+    # --- Renderizar HTML y generar PDF con WeasyPrint ---
+    from django.template.loader import render_to_string
+    from weasyprint import HTML
 
-    return FileResponse(
-        pdf_buffer,
-        as_attachment=True,
-        filename=f"reporte_consolidado_{consulta_id}.pdf"
+    # Puedes ajustar el contexto según lo que use tu template
+    riesgo = getattr(consulta, "riesgo", {})
+    color_riesgo = "green"
+    if isinstance(riesgo, dict):
+        categoria = (riesgo.get("categoria") or "").lower()
+        if "alto" in categoria:
+            color_riesgo = "red"
+        elif "medio" in categoria:
+            color_riesgo = "yellow"
+
+    context = {
+        "consulta_id": consulta_id,
+        "consolidado_id": getattr(getattr(consulta, "consolidado", None), "id", ""),
+        "candidato": consulta.candidato,
+        "resultados": resultados,
+        "riesgo": riesgo,
+        "color_riesgo": color_riesgo,
+        "mapa_riesgo": "",
+        "bubble_chart": "",
+        "qr_url": "",
+        "tipo_reporte": "Consolidado General",
+        "fecha_generacion": getattr(consulta, "fecha", None),
+        "fecha_actualizacion": getattr(consulta, "fecha", None),
+    }
+
+    html = render_to_string("reportes/consolidado.html", context)
+    pdf_bytes = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
+
+    return HttpResponse(
+        pdf_bytes,
+        content_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="reporte_consolidado_{consulta_id}.pdf"'
+        }
     )
 
 @api_view(["GET"])
