@@ -1,38 +1,4 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.http import HttpResponse
-from pathlib import Path
-from weasyprint import HTML, CSS
-from django.conf import settings
-from .models import Consolidado
-import qrcode
-from io import BytesIO
-from django.utils.timezone import now
-
-# Endpoint de prueba para validar aplicación de CSS en PDF con WeasyPrint
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def test_pdf_css(request):
-    html = """
-    <html>
-      <head></head>
-      <body>
-        <h1 class='titulo'>PDF TEST</h1>
-      </body>
-    </html>
-    """
-    base_path = Path(settings.STATIC_ROOT).resolve()
-    css_path = base_path / "css" / "style.css"
-    if not css_path.exists():
-        return HttpResponse(f"CSS no encontrado: {css_path}", status=500)
-    pdf = HTML(
-        string=html,
-        base_url=base_path.as_uri()
-    ).write_pdf(
-        stylesheets=[CSS(filename=str(css_path))]
-    )
-    return HttpResponse(pdf, content_type="application/pdf")
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from .serializers import FuenteSerializer
 # CRUD para Fuente
@@ -142,60 +108,9 @@ def uniq_preserve(iterable):
             seen.add(x)
     return out
 
+# Mapa de profesiones y bots a ejecutar
+import re
 
-# Mapa de profesiones y bots a ejecutar (alineado con el frontend)
-PROFESION_BOT_MAP = [
-    # Abogado/a
-    (re.compile(r"abogado/a|abogad[oa]", re.I), ["sirna_inscritos_png", "rama_abogado_certificado"]),
-
-    # Economista
-    (re.compile(r"economista", re.I), ["conalpe_consulta_inscritos", "conalpe_certificado"]),
-
-    # Psicólogo/a
-    (re.compile(r"psic[oó]logo/a|psic[oó]log[oa]", re.I), ["colpsic_verificacion_tarjetas", "colpsic_validar_documento"]),
-
-    # Bacteriólogo/a
-    (re.compile(r"bacteri[oó]logo/a|bacteri[oó]log[oa]", re.I), ["cnb_carnet_afiliacion", "cnb_consulta_matriculados"]),
-
-    # Biólogo/a
-    (re.compile(r"b[ií]ologo/a|b[ií]olog[oa]", re.I), ["biologia_consulta", "biologia_validacion_certificados"]),
-
-    # Químico/a
-    (re.compile(r"qu[ií]mico/a|qu[ií]mic[oa]", re.I), ["cpqcol_verificar", "cpqcol_antecedentes"]),
-
-    # Ingeniero/a Químico/a
-    (re.compile(r"ingeniero/a qu[ií]mico/a|ingenier[oa] qu[ií]mic[oa]", re.I), ["cpiq_validacion_matricula", "cpiq_validacion_tarjeta", "cpiq_certificado_vigencia", "cpiq_validacion_certificado_vigencia"]),
-
-    # Ingeniero/a de Petróleos
-    (re.compile(r"ingeniero/a de petr[oó]leos|ingenier[oa] de petr[oó]leos", re.I), ["cpip_verif_matricula"]),
-
-    # Topógrafo/a
-    (re.compile(r"top[oó]grafo/a|top[oó]graf[oa]", re.I), ["cpnt_vigenciapdf", "cpnt_vigencia_externa_form", "cpnt_consulta_licencia"]),
-
-    # Arquitecto/a
-    (re.compile(r"arquitecto/a|arquitect[oa]", re.I), ["cpnaa_matricula_arquitecto", "cpnaa_certificado_vigencia"]),
-
-    # Tecnólogo/a en Electricidad/Electrónica/Electromecánica
-    (re.compile(r"tecn[oó]logo/a en electricidad/electr[oó]nica/electromec[aá]nica|tecn[oó]log[oa]", re.I), ["conaltel_consulta_matriculados"]),
-
-    # Técnico/a Electricista
-    (re.compile(r"t[eé]cnico/a electricista|t[eé]cnic[oa] electricist[ae]", re.I), ["conte_consulta_matricula", "conte_consulta_vigencia"]),
-
-    # Ingeniero/a Eléctrico/Mecánico/Electrónico/Telecom/Metalúrgico/Aeronáutico/Nuclear/Electromecánico
-    (re.compile(r"ingeniero/a el[eé]ctrico/mec[aá]nico/electr[oó]nico/telecom/metal[uú]rgico/aeron[aá]utico/nuclear/electromec[aá]nico|ingenier[oa]", re.I), ["cp_validar_matricula", "cp_validar_certificado", "cp_certificado_busqueda", "colelectro_directorio"]),
-
-    # Ingeniero/a (genérico)
-    (re.compile(r"ingeniero/a|ingenier[oa]", re.I), ["copnia_certificado"]),
-
-    # Administrador/a de Empresas/Negocios
-    (re.compile(r"administrador/a de empresas/negocios|administrador[ae] de empresas", re.I), ["cpae_certificado"]),
-
-    # Administrador/a Ambiental
-    (re.compile(r"administrador/a ambiental|administrador[ae] ambiental", re.I), ["cpaa_generar_certificado"]),
-
-    # Contador/a
-    (re.compile(r"contador/a|contador[ae]", re.I), ["conpucol_verificacion_colegiados", "conpucol_certificados"]),
-]
 
 def bots_por_profesion(profesion: str) -> list[str]:
     p = _norm(profesion)
@@ -204,6 +119,7 @@ def bots_por_profesion(profesion: str) -> list[str]:
         if rx.search(p):
             sugeridos.extend(bots)
     return uniq_preserve(sugeridos)
+
 
 User = get_user_model()
 
@@ -463,85 +379,82 @@ BOTS_PREMIUM_FIJOS = ['policia_nacional',
                     "ruaf",
                     'secop_consulta_aacs',
                     'colpensiones_rpm',
-                    'skanfia_certificados',
-                    'colpensiones_pila',
-                    'colfondo_consulta',
                     'porvenir_cert_afiliacion',
                     'banco_proveedores_consulta_estados']
 PROFESION_BOT_MAP = [
-    #ABOGACÍA (SIRNA: Registro Nacional de Abogados)  — valor sugerido: "abogado(a)"
-     (re.compile(r"\babogad[oa]s?\b", re.I),
+    # ABOGACÍA (SIRNA: Registro Nacional de Abogados)  — valor sugerido: "abogado(a)"
+    (re.compile(r"\babogad[oa]s?\b", re.I),
      ["sirna_inscritos_png", "rama_abogado_certificado"]),
 
-     #ECONOMÍA (CONALPE)  — valor sugerido: "economista(s)"
-     (re.compile(r"\beconomistas?\b", re.I),
+    # ECONOMÍA (CONALPE)  — valor sugerido: "economista(s)"
+    (re.compile(r"\beconomistas?\b", re.I),
      ["conalpe_consulta_inscritos", "conalpe_certificado"]),
 
-     #PSICOLOGÍA (COLPSIC)  — valor sugerido: "psicólogo(a)"
-     (re.compile(r"\bpsic(?:ó|o)log[oa]s?\b", re.I),
-      ["colpsic_verificacion_tarjetas", "colpsic_validar_documento"]),
+    # PSICOLOGÍA (COLPSIC)  — valor sugerido: "psicólogo(a)"
+    # (re.compile(r"\bpsic(?:ó|o)log[oa]s?\b", re.I),
+    #  ["colpsic_verificacion_tarjetas", "colpsic_validar_documento"]),
 
-     #BACTERIOLOGÍA (CNB)  — valor sugerido: "bacteriólogo(a)"
-     (re.compile(r"\bbacteriol(?:ó|o)g[oa]s?\b", re.I),
-      ["cnb_carnet_afiliacion", "cnb_consulta_matriculados"]),
+    # BACTERIOLOGÍA (CNB)  — valor sugerido: "bacteriólogo(a)"
+    # (re.compile(r"\bbacteriol(?:ó|o)g[oa]s?\b", re.I),
+    #  ["cnb_carnet_afiliacion", "cnb_consulta_matriculados"]),
 
-     #BIOLOGÍA (Consejo Profesional de Biología)  — valor sugerido: "biólogo(a)"
-     (re.compile(r"\bbiol(?:ó|o)g[oa]s?\b", re.I),
-      ["biologia_consulta", "biologia_validacion_certificados"]),
+    # BIOLOGÍA (Consejo Profesional de Biología)  — valor sugerido: "biólogo(a)"
+    # (re.compile(r"\bbiol(?:ó|o)g[oa]s?\b", re.I),
+    #  ["biologia_consulta", "biologia_validacion_certificados"]),
 
-     #QUÍMICA (CPQCOL)  — valor sugerido: "químico(a)"
-     (re.compile(r"\bqu(?:í|i)mic[oa]s?\b", re.I),
-      ["cpqcol_verificar", "cpqcol_antecedentes"]),
+    # QUÍMICA (CPQCOL)  — valor sugerido: "químico(a)"
+    # (re.compile(r"\bqu(?:í|i)mic[oa]s?\b", re.I),
+    #  ["cpqcol_verificar", "cpqcol_antecedentes"]),
 
-     #INGENIERÍA QUÍMICA (CPIQ)  — valor sugerido: "ingeniero(a) químico(a)"
-     (re.compile(r"\bingenier[oa]s?\s+qu(?:í|i)mic[oa]s?\b", re.I),
-      ["cpiq_validacion_matricula", "cpiq_validacion_tarjeta",
-       "cpiq_certificado_vigencia", "cpiq_validacion_certificado_vigencia"]),
+    # INGENIERÍA QUÍMICA (CPIQ)  — valor sugerido: "ingeniero(a) químico(a)"
+    # (re.compile(r"\bingenier[oa]s?\s+qu(?:í|i)mic[oa]s?\b", re.I),
+    #  ["cpiq_validacion_matricula", "cpiq_validacion_tarjeta",
+    #   "cpiq_certificado_vigencia", "cpiq_validacion_certificado_vigencia"]),
 
-     #INGENIERÍA DE PETRÓLEOS (CPIP)  — valor sugerido: "ingeniero(a) de petróleos"
-     (re.compile(r"\bingenier[oa]s?\s+de\s+petr(?:ó|o)leos?\b", re.I),
-      ["cpip_verif_matricula"]),
+    # INGENIERÍA DE PETRÓLEOS (CPIP)  — valor sugerido: "ingeniero(a) de petróleos"
+    # (re.compile(r"\bingenier[oa]s?\s+de\s+petr(?:ó|o)leos?\b", re.I),
+    #  ["cpip_verif_matricula"]),
 
-     #TOPOGRAFÍA (CPNT)  — valor sugerido: "topógrafo(a)"
-     (re.compile(r"\btop(?:ó|o)graf[oa]s?\b", re.I),
-      ["cpnt_vigenciapdf", "cpnt_vigencia_externa_form", "cpnt_consulta_licencia"]),
+    # TOPOGRAFÍA (CPNT)  — valor sugerido: "topógrafo(a)"
+    # (re.compile(r"\btop(?:ó|o)graf[oa]s?\b", re.I),
+    #  ["cpnt_vigenciapdf", "cpnt_vigencia_externa_form", "cpnt_consulta_licencia"]),
 
-     #ARQUITECTURA (CPNAA)  — valor sugerido: "arquitecto(a)"
-     (re.compile(r"\barquitect[oa]s?\b", re.I),
-      ["cpnaa_matricula_arquitecto", "cpnaa_certificado_vigencia"]),
+    # ARQUITECTURA (CPNAA)  — valor sugerido: "arquitecto(a)"
+    # (re.compile(r"\barquitect[oa]s?\b", re.I),
+    #  ["cpnaa_matricula_arquitecto", "cpnaa_certificado_vigencia"]),
 
-     #TECNÓLOGOS (CONALTEL)  — valor sugerido: "tecnólogo(a)"
-     (re.compile(r"\btecn(?:ó|o)log[oa]s?\b", re.I),
-      ["conaltel_consulta_matriculados"]),
+    # TECNÓLOGOS (CONALTEL)  — valor sugerido: "tecnólogo(a)"
+    # (re.compile(r"\btecn(?:ó|o)log[oa]s?\b", re.I),
+    #  ["conaltel_consulta_matriculados"]),
 
-     #TÉCNICOS ELECTRICISTAS (CONTE)  — valor sugerido: "técnico(a) electricista"
-     (re.compile(r"\bt[ée]cnic[oa]s?\s+electricist[ae]s?\b", re.I),
-     ["conte_consulta_matricula", "conte_consulta_vigencia"]),
+    # TÉCNICOS ELECTRICISTAS (CONTE)  — valor sugerido: "técnico(a) electricista"
+    # (re.compile(r"\bt[ée]cnic[oa]s?\s+electricist[ae]s?\b", re.I),
+    #  ["conte_consulta_matricula", "conte_consulta_vigencia"]),
 
-     #INGENIERÍAS VARIAS (Consejo Profesional Nacional) — valor sugerido: "ingeniero(a)"
-     #Nota: comparte patrón con el fallback; deja este antes para que tenga prioridad.
-     (re.compile(r"\bingenier[oa]s?\b", re.I),
-      ["cp_validar_matricula", "cp_validar_certificado", "cp_certificado_busqueda", "colelectro_directorio"]),
+    # INGENIERÍAS VARIAS (Consejo Profesional Nacional) — valor sugerido: "ingeniero(a)"
+    # Nota: comparte patrón con el fallback; deja este antes para que tenga prioridad.
+    # (re.compile(r"\bingenier[oa]s?\b", re.I),
+    #  ["cp_validar_matricula", "cp_validar_certificado", "cp_certificado_busqueda", "colelectro_directorio"]),
 
-     #INGENIERÍA (genérico/fallback) → COPNIA  — valor sugerido: "ingeniero(a)"
+    # INGENIERÍA (genérico/fallback) → COPNIA  — valor sugerido: "ingeniero(a)"
     (re.compile(r"\bingenier[oa]s?\b", re.I),
      ["copnia_certificado"]),
 
-     #ADMINISTRACIÓN DE EMPRESAS / NEGOCIOS (CPAE)  — valor sugerido: "administrador(a) de empresas"
+    # ADMINISTRACIÓN DE EMPRESAS / NEGOCIOS (CPAE)  — valor sugerido: "administrador(a) de empresas"
     (re.compile(r"\badministrador[ae]s?\s+de\s+empresas?\b", re.I),
      ["cpae_certificado"]),
      
-     #ADMINISTRACIÓN PUBLICO (CPAA)  — valor sugerido: "administrador(a) publico"
-     (re.compile(r"\badministrador[ae]s?\s+publico(?:es)?\b", re.I),
+    # ADMINISTRACIÓN PUBLICO (CPAA)  — valor sugerido: "administrador(a) publico"
+    (re.compile(r"\badministrador[ae]s?\s+publico(?:es)?\b", re.I),
      ["ccap_validate_identity"]),
 
-     #ADMINISTRACIÓN AMBIENTAL (CPAA)  — valor sugerido: "administrador(a) ambiental"
-     (re.compile(r"\badministrador[ae]s?\s+ambiental(?:es)?\b", re.I),
+    # ADMINISTRACIÓN AMBIENTAL (CPAA)  — valor sugerido: "administrador(a) ambiental"
+    (re.compile(r"\badministrador[ae]s?\s+ambiental(?:es)?\b", re.I),
      ["cpaa_generar_certificado"]),
 
-     #CONTADURÍA (CONPUCOL)  — valor sugerido: "contador(a)"
-     (re.compile(r"\bcontador[ae]s?\b", re.I),
-     ["conpucol_verificacion_colegiados", "conpucol_certificados"]),
+    # CONTADURÍA (CONPUCOL)  — valor sugerido: "contador(a)"
+    # (re.compile(r"\bcontador[ae]s?\b", re.I),
+    #  ["conpucol_verificacion_colegiados", "conpucol_certificados"]),
 ]
 
 @api_view(["POST"])
@@ -766,15 +679,16 @@ def api_consultar(request):
 
         bots_profesion = bots_por_profesion(profesion)
 
-
         # ---------------------------------------------
-        # Enrutamiento por "contratista" basado en parámetros (ACTUALIZADO)
-        # Ejecuta bots de colegio regulador según profesión + bots predeterminados
+        # Enrutamiento por "contratista" basado en parámetros (NUEVO)
         # ---------------------------------------------
         if es_contratista:
-            lista_final = uniq_preserve((bots_profesion or []) + (BOTS_CONTRATISTA_FIJOS or []))
+            lista_final = uniq_preserve(
+                (BOTS_CONTRATISTA_FIJOS or []) +
+                (bots_profesion or [])
+            )
             if not lista_final:
-                return Response({"error": "No hay bots configurados para la profesión seleccionada ni predeterminados."}, status=status.HTTP_400_BAD_REQUEST)
+                lista_final = BOTS_CONTRATISTA_FIJOS
             procesar_consulta_contratista_por_nombres.delay(consulta.id, datos, lista_final)
         else:
             if lista_nombres:
@@ -1296,7 +1210,7 @@ def generar_mapa_calor_interno(consulta_id):
 
     # ——— Matriz (consecuencia x probabilidad) ———
     riesgo_matrix = np.array([
-        [1,  2,  3,  4, 5],
+        [1,  2,  3,  4,  5],
         [2,  4,  6,  8, 10],
         [3,  6,  9, 12, 15],
         [4,  8, 12, 16, 20],
@@ -1485,10 +1399,12 @@ def reporte(request, consulta_id):
     nivel_color = {"I": "red", "II": "orange", "III": "yellow", "IV": "green"}
     color_riesgo = nivel_color.get(calcular_riesgo.get("nivel_global"), "gray")
 
+    # Convertir ruta a URL absoluta
     for r in resultados:
         if r.get("archivo"):
             relative_path = r["archivo"].replace("\\", "/")
             r["archivo_url"] = request.build_absolute_uri(settings.MEDIA_URL + relative_path)
+
 
     context = {
         "mapa_riesgo": mapa_riesgo_data,
@@ -1498,48 +1414,53 @@ def reporte(request, consulta_id):
     }
 
     html_string = render_to_string("reportes/consolidado.html", context)
-    from pathlib import Path
-    from weasyprint import HTML, CSS
-    base_path = Path(settings.STATIC_ROOT).resolve()
-    css_path = base_path / "css" / "style.css"
-    if not css_path.exists():
-        raise FileNotFoundError(f"CSS no encontrado: {css_path}")
-    pdf = HTML(
-        string=html_string,
-        base_url=base_path.as_uri()
-    ).write_pdf(
-        stylesheets=[CSS(filename=str(css_path))]
-    )
+    pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
+
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = "inline; filename=reporte.pdf"
     return response
 
 def descargar_reporte(request, consulta_id):
+    # Datos internos ya calculados
     calcular_riesgo = calcular_riesgo_interno_b(consulta_id)
     resultados = listar_resultados_interno(consulta_id)
+    # mapa_riesgo_data = generar_mapa_calor_interno(consulta_id)
+
+    # Diccionario de colores según nivel de riesgo
     nivel_color = {"I": "red", "II": "orange", "III": "yellow", "IV": "green"}
     color_riesgo = nivel_color.get(calcular_riesgo.get("nivel_global"), "gray")
+
     context = {
+        # "mapa_riesgo": mapa_riesgo_data,
         "resultados": resultados,
         "riesgo": calcular_riesgo,
         "color_riesgo": color_riesgo,
     }
+
+    # Renderizar HTML y generar PDF
     html_string = render_to_string("reportes/consolidado.html", context)
-    from pathlib import Path
-    from weasyprint import HTML, CSS
-    base_path = Path(settings.STATIC_ROOT).resolve()
-    css_path = base_path / "css" / "style.css"
-    if not css_path.exists():
-        raise FileNotFoundError(f"CSS no encontrado: {css_path}")
-    pdf = HTML(
-        string=html_string,
-        base_url=base_path.as_uri()
-    ).write_pdf(
-        stylesheets=[CSS(filename=str(css_path))]
-    )
+    pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
+
+    # Crear respuesta con descarga
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="reporte_{consulta_id}.pdf"'
     return response
+
+from datetime import timedelta
+
+import qrcode
+from io import BytesIO
+from django.core.files.base import ContentFile
+from django.urls import reverse
+
+import qrcode
+from io import BytesIO
+from django.core.files.base import ContentFile
+from django.urls import reverse
+from weasyprint import HTML
+from django.utils.timezone import now
+from .models import Consolidado
+from django.utils.text import slugify 
 
 def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
     from django.db import transaction
@@ -1704,18 +1625,10 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
     template_path = templates_por_tipo.get(tipo_id, "reportes/consolidado.html")
 
     html_string = render_to_string(template_path, context)
-    from pathlib import Path
-    from weasyprint import HTML, CSS
-    base_path = Path(settings.STATIC_ROOT).resolve()
-    css_path = base_path / "css" / "style.css"
-    if not css_path.exists():
-        raise FileNotFoundError(f"CSS no encontrado: {css_path}")
     pdf_bytes = HTML(
         string=html_string,
-        base_url=base_path.as_uri()
-    ).write_pdf(
-        stylesheets=[CSS(filename=str(css_path))]
-    )
+        base_url=(request.build_absolute_uri() if request else None)
+    ).write_pdf()
 
     filename = safe_filename(candidato.nombre, candidato.apellido, candidato.cedula, ext="pdf")
 
@@ -1758,7 +1671,7 @@ def generar_consolidado(request, consulta_id, tipo_id):
         traceback.print_exc()
         return Response({"status": "error", "message": str(e)}, status=500)
 
-from django.db.models import Count, Avg, Q
+from django.db.models import Avg, Count, Q
 
 def resumen_consulta_interno(consulta_id):
     try:
@@ -1954,18 +1867,7 @@ def generar_consolidado_api(request, consulta_id, tipo_id):
 
     # --- Render PDF ---
     html_string = render_to_string("reportes/consolidado_pdf.html", context)
-    from pathlib import Path
-    from weasyprint import HTML, CSS
-    base_path = Path(settings.STATIC_ROOT).resolve()
-    css_path = base_path / "css" / "style.css"
-    if not css_path.exists():
-        raise FileNotFoundError(f"CSS no encontrado: {css_path}")
-    pdf_bytes = HTML(
-        string=html_string,
-        base_url=base_path.as_uri()
-    ).write_pdf(
-        stylesheets=[CSS(filename=str(css_path))]
-    )
+    pdf_bytes = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
 
     # --- Respuesta HTTP (mostrar inline en navegador) ---
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
@@ -1975,7 +1877,7 @@ def generar_consolidado_api(request, consulta_id, tipo_id):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def generar_consolidado_descarga(request, consulta_id, tipo_id):
     try:
         # Genera y guarda el consolidado en la base de datos
@@ -2418,144 +2320,3 @@ def test_email(request):
                         status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def test_pdf_consolidado(request):
-    print("[DEBUG] Entrando a test_pdf_consolidado")
-    # Datos simulados para el consolidado
-    import qrcode
-    import base64
-    from io import BytesIO
-    ejemplos = []
-    riesgos = [
-        ("Bajo", "#00E676", 1, "Masculino", "Camilo", "Ruiz", "123456789"),
-        ("Medio", "#FFC400", 3, "Masculino", "Carlos", "López", "987654321"),
-        ("Alto", "#FF1744", 5, "Femenino", "María", "Ruiz", "555555555"),
-    ]
-    # Imagen PNG base64 de ejemplo (un cuadrado azul)
-    import matplotlib.pyplot as plt
-    import numpy as np
-    # Utilidad para convertir imagen local a base64
-    def file_to_base64(path):
-        try:
-            with open(path, "rb") as f:
-                return "data:image/png;base64," + base64.b64encode(f.read()).decode()
-        except Exception as e:
-            print(f"[WARN] No se pudo abrir {path}: {e}")
-            return ""
-
-    # Logo y foto de candidato (usa tus rutas reales de estáticos recolectados)
-    import os
-    static_img = os.path.join(settings.STATIC_ROOT, "img")
-    logo_path = os.path.join(static_img, "logo.jpg")
-    foto_path = os.path.join(static_img, "placeholder_verde.png")
-    print(f"[DEBUG] STATIC_ROOT: {settings.STATIC_ROOT}")
-    print(f"[DEBUG] logo_path: {logo_path} exists: {os.path.exists(logo_path)}")
-    print(f"[DEBUG] foto_path: {foto_path} exists: {os.path.exists(foto_path)}")
-    logo_b64 = file_to_base64(logo_path) if os.path.exists(logo_path) else ""
-    foto_b64 = file_to_base64(foto_path) if os.path.exists(foto_path) else ""
-    print("[DEBUG] Generando matriz de calor y bubble chart...")
-    print("[DEBUG] Renderizando HTML y generando PDF...")
-
-    # Matriz de calor y gráfico de burbujas de ejemplo (simula consulta real)
-    def matriz_calor_base64():
-        import matplotlib.pyplot as plt
-        import numpy as np
-        fig, ax = plt.subplots(figsize=(4,3))
-        data = np.random.randint(0, 10, (5, 5))
-        cax = ax.matshow(data, cmap="RdYlGn")
-        for (i, j), z in np.ndenumerate(data):
-            ax.text(j, i, f"{z}", ha='center', va='center', color='black')
-        plt.title("Mapa de Calor de Riesgo")
-        plt.tight_layout()
-        buf = BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
-        plt.close(fig)
-        return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
-
-    def bubble_chart_base64():
-        import matplotlib.pyplot as plt
-        import numpy as np
-        fig, ax = plt.subplots(figsize=(4,3))
-        x = np.random.rand(10)
-        y = np.random.rand(10)
-        sizes = 1000 * np.random.rand(10)
-        ax.scatter(x, y, s=sizes, alpha=0.5)
-        plt.title("Bubble Chart de Ejemplo")
-        plt.tight_layout()
-        buf = BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
-        plt.close(fig)
-        return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
-
-    mapa_riesgo_b64 = matriz_calor_base64()
-    bubble_chart_b64 = bubble_chart_base64()
-
-    for idx, (categoria, color, score, sexo, nombre, apellido, cedula) in enumerate(riesgos, 1):
-        # Generar QR como base64
-        qr = qrcode.make(f"https://econfia.co/consulta/{100+idx}")
-        qr_io = BytesIO()
-        qr.save(qr_io, format="PNG")
-        qr_b64 = "data:image/png;base64," + base64.b64encode(qr_io.getvalue()).decode()
-        ejemplos.append({
-            "mapa_riesgo": mapa_riesgo_b64,
-            "bubble_chart": bubble_chart_b64,
-            "logo_b64": logo_b64,
-            "foto_b64": foto_b64,
-            "resultados": [
-                {"fuente": "Fuente Ejemplo", "tipo_fuente": "Tipo", "estado": "Validado", "score": score, "mensaje": f"Mensaje de ejemplo para {categoria}", "archivo": None},
-            ],
-            "riesgo": {"riesgo": categoria, "categoria": categoria},
-            "color_riesgo": color,
-            "consulta_id": 100+idx,
-            "consolidado_id": 200+idx,
-            "fecha_generacion": "2025-12-15 12:00:00",
-            "fecha_actualizacion": "2025-12-15 12:00:00",
-            "usuario": "prueba",
-            "tipo_reporte": "Consolidado de ejemplo",
-            "ip_generacion": "127.0.0.1",
-            "qr_url": qr_b64,
-            "candidato": {
-                "cedula": cedula,
-                "tipo_doc": "CC",
-                "nombre": nombre,
-                "apellido": apellido,
-                "fecha_nacimiento": "1990-01-01",
-                "fecha_expedicion": "2010-01-01",
-                "tipo_persona": "Natural",
-                "sexo": sexo,
-            },
-        })
-    # DEBUG: Verifica rutas de logo y placeholders en STATIC_ROOT/img/
-    # from pathlib import Path
-    # import os
-    # static_img = Path(settings.STATIC_ROOT) / 'img'
-    # print('Logo existe:', os.path.exists(static_img / 'logo.jpg'))
-    # print('Placeholder verde:', os.path.exists(static_img / 'placeholder_verde.png'))
-    from django.template.loader import render_to_string
-    from pathlib import Path
-    from weasyprint import HTML, CSS
-    # from django.conf import settings  # <-- Eliminar este import local
-    base_path = Path(settings.STATIC_ROOT).resolve()
-    css_path = base_path / "css" / "style.css"
-    if not css_path.exists():
-        return HttpResponse(f"CSS no encontrado: {css_path}", status=500)
-    try:
-        html_string = "".join([render_to_string("reportes/consolidado.html", ctx) for ctx in ejemplos])
-        pdf = HTML(
-            string=html_string,
-            base_url=base_path.as_uri()
-        ).write_pdf(
-            stylesheets=[CSS(filename=str(css_path))]
-        )
-        print("[DEBUG] PDF generado correctamente")
-        return HttpResponse(pdf, content_type="application/pdf")
-    except Exception as e:
-        print(f"[ERROR] Fallo al generar PDF: {e}")
-        import traceback
-        traceback.print_exc()
-        return HttpResponse(f"Error generando PDF: {e}", status=500)

@@ -77,6 +77,7 @@ def generar_pdf_consolidado(resultados, consulta_id):
     pdf_merger.append(buffer_pdf_base)
 
     # --- Logo ---
+    print(f"[DEBUG] Intentando abrir logo en: {logo_path}")
     if os.path.exists(logo_path):
         print(f"[PDF] Logo encontrado y agregado: {logo_path}")
         pdf_merger.append(imagen_a_pdf_buffer(logo_path))
@@ -92,7 +93,7 @@ def generar_pdf_consolidado(resultados, consulta_id):
     else:
         foto = "placeholder.png"
     foto_path = os.path.join(BASE_STATIC_IMG, foto)
-    print(f"[PDF] Ruta avatar: {foto_path}")
+    print(f"[DEBUG] Intentando abrir avatar en: {foto_path}")
     if os.path.exists(foto_path):
         print(f"[PDF] Avatar encontrado y agregado: {foto_path}")
         pdf_merger.append(imagen_a_pdf_buffer(foto_path))
@@ -109,27 +110,57 @@ def generar_pdf_consolidado(resultados, consulta_id):
             print(f"[PDF] QR NO encontrado: {qr_path}")
 
     # --- Matriz de calor y bubble chart (usando funciones reales) ---
+    import base64
+    from PIL import Image as PILImage, ImageDraw, ImageFont
+
+    def imagen_sin_datos(texto="Sin datos"):
+        # Crea una imagen PNG simple con el texto "Sin datos"
+        img = PILImage.new("RGB", (400, 200), color=(240, 240, 240))
+        d = ImageDraw.Draw(img)
+        try:
+            font = ImageFont.truetype("arial.ttf", 24)
+        except Exception:
+            font = ImageFont.load_default()
+        w, h = d.textsize(texto, font=font)
+        d.text(((400-w)/2, (200-h)/2), texto, fill=(80, 80, 80), font=font)
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode("utf-8")
+
+    # --- Matriz de calor ---
     mapa_b64 = generar_mapa_calor_interno(consulta_id)
-    print(f"[PDF] matriz de calor base64: {len(mapa_b64) if mapa_b64 else 0} bytes")
-    if mapa_b64:
+    print(f"[DEBUG] Consolidado - mapa_b64: {mapa_b64[:60] if mapa_b64 else 'VACÍO'}")
+    if mapa_b64 and mapa_b64.strip() and mapa_b64[:10] == "iVBORw0KGg":
         try:
             pdf_merger.append(b64img_a_pdf_buffer(mapa_b64))
             print("[PDF] Matriz de calor agregada al PDF")
         except Exception as e:
             print(f"[PDF] ERROR agregando matriz de calor: {e}")
     else:
-        print("[PDF] matriz de calor VACÍA o nula")
+        print("[PDF] matriz de calor VACÍA, nula o inválida. Se agrega imagen de Sin datos.")
+        try:
+            sin_datos_b64 = imagen_sin_datos("Sin datos - Mapa de calor")
+            pdf_merger.append(b64img_a_pdf_buffer(sin_datos_b64))
+        except Exception as e:
+            print(f"[PDF] ERROR agregando imagen de Sin datos (mapa de calor): {e}")
 
+    # --- Bubble chart ---
     bubble_b64 = generar_bubble_chart_interno(consulta_id)
-    print(f"[PDF] bubble chart base64: {len(bubble_b64) if bubble_b64 else 0} bytes")
-    if bubble_b64:
+    print(f"[DEBUG] Consolidado - bubble_b64: {bubble_b64[:60] if bubble_b64 else 'VACÍO'}")
+    if bubble_b64 and bubble_b64.strip() and bubble_b64[:10] == "iVBORw0KGg":
         try:
             pdf_merger.append(b64img_a_pdf_buffer(bubble_b64))
             print("[PDF] Bubble chart agregado al PDF")
         except Exception as e:
             print(f"[PDF] ERROR agregando bubble chart: {e}")
     else:
-        print("[PDF] bubble chart VACÍO o nulo")
+        print("[PDF] bubble chart VACÍO, nulo o inválido. Se agrega imagen de Sin datos.")
+        try:
+            sin_datos_b64 = imagen_sin_datos("Sin datos - Bubble chart")
+            pdf_merger.append(b64img_a_pdf_buffer(sin_datos_b64))
+        except Exception as e:
+            print(f"[PDF] ERROR agregando imagen de Sin datos (bubble chart): {e}")
 
     # --- Capturas de imágenes de los resultados ---
     for r in resultados:
