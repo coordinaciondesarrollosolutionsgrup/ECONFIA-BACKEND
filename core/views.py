@@ -1,6 +1,7 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from .serializers import FuenteSerializer
+
 # CRUD para Fuente
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
@@ -46,7 +47,8 @@ from asgiref.sync import async_to_sync
 from .consultar_registraduria import consultar_registraduria
 from django.template.loader import render_to_string
 from django.http import HttpResponse
-from weasyprint import HTML
+from weasyprint import HTML, CSS
+from django.contrib.staticfiles import finders
 import base64
 import matplotlib.pyplot as plt
 import numpy as np
@@ -1413,8 +1415,12 @@ def reporte(request, consulta_id):
         "color_riesgo": color_riesgo,
     }
 
+
     html_string = render_to_string("reportes/consolidado.html", context)
-    pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
+    css_path = finders.find('css/style.css')
+    pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(
+        stylesheets=[CSS(filename=css_path)] if css_path else None
+    )
 
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = "inline; filename=reporte.pdf"
