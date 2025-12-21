@@ -1418,7 +1418,6 @@ def reporte(request, consulta_id):
 
     html_string = render_to_string("reportes/consolidado.html", context)
     css_path = finders.find('css/style.css')
-    print("CSS path usado para PDF:", css_path)
     pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(
         stylesheets=[CSS(filename=css_path)] if css_path else None
     )

@@ -23,39 +23,54 @@ def generar_pdf_consolidado(resultados, consulta_id):
     print(f"[PDF] Ruta logo: {logo_path}")
     print(f"[PDF] Ruta logo: {logo_path}")
 
-    styles = getSampleStyleSheet()
-    buffer_pdf_base = io.BytesIO()
-    doc = SimpleDocTemplate(buffer_pdf_base, pagesize=A4)
-    elements = []
 
-    # --- Solo texto: datos del candidato y tabla ---
-    datos = f"""
-    <b>{candidato.nombre} {candidato.apellido}</b><br/>
-    Cédula: {candidato.cedula}<br/>
-    Sexo: {getattr(candidato, 'sexo', '')}<br/>
-    Fecha de nacimiento: {getattr(candidato, 'fecha_nacimiento', '')}<br/>
-    Fecha expedición: {getattr(candidato, 'fecha_expedicion', '')}<br/>
-    Tipo persona: {getattr(candidato, 'tipo_persona', '')}<br/>
-    """
-    elements.append(Paragraph(datos, styles["Normal"]))
-    elements.append(Spacer(1, 12))
+    # --- NUEVO: Portada y layout principal con WeasyPrint (consolidado.html + style.css) ---
+    from django.template.loader import render_to_string
+    from django.contrib.staticfiles import finders
+    from weasyprint import HTML, CSS
 
-    elements.append(Paragraph("<b>Resultados</b>", styles["Heading2"]))
-    data = [["Fuente", "Tipo", "Estado", "Score", "Mensaje"]]
-    for r in resultados:
-        data.append([r["fuente"], r["tipo_fuente"], r["estado"], str(r["score"]), r["mensaje"]])
-    table = Table(data, colWidths=[100, 80, 100, 50, 200])
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.grey),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-        ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-    ]))
-    elements.append(table)
+    css_path = finders.find("css/style.css")
+    if not css_path:
+        raise FileNotFoundError("No se encontró css/style.css via finders.find().")
 
-    doc.build(elements)
-    buffer_pdf_base.seek(0)
+    riesgo = calcular_riesgo_interno(consulta_id)
+    mapa_riesgo = generar_mapa_calor_interno(consulta_id) or ""
+    bubble_chart = generar_bubble_chart_interno(consulta_id) or ""
+
+    # Color de riesgo simple (ajústalo como tú lo manejas)
+    categoria = (riesgo.get("categoria") or "").lower()
+    if "alto" in categoria:
+        color_riesgo = "red"
+    elif "medio" in categoria:
+        color_riesgo = "yellow"
+    else:
+        color_riesgo = "green"
+
+    html = render_to_string(
+        "reportes/consolidado.html",
+        {
+            "consulta_id": consulta_id,
+            "consolidado_id": getattr(getattr(consulta, "consolidado", None), "id", ""),
+            "candidato": candidato,
+            "resultados": resultados,
+            "riesgo": riesgo,
+            "color_riesgo": color_riesgo,
+            "mapa_riesgo": mapa_riesgo,
+            "bubble_chart": bubble_chart,
+            # El QR y las capturas se anexan después, no aquí
+            "qr_url": "",
+            "tipo_reporte": "Consolidado General",
+            "fecha_generacion": getattr(consulta, "fecha", None),
+            "fecha_actualizacion": getattr(consulta, "fecha", None),
+        },
+    )
+
+    pdf_html_buffer = io.BytesIO()
+    HTML(string=html, base_url=settings.BASE_DIR).write_pdf(
+        pdf_html_buffer,
+        stylesheets=[CSS(filename=css_path)],
+    )
+    pdf_html_buffer.seek(0)
 
     # --- Utilidad: imagen a PDF (Pillow) ---
     def imagen_a_pdf_buffer(path_img):
@@ -74,7 +89,7 @@ def generar_pdf_consolidado(resultados, consulta_id):
         return buf
 
     pdf_merger = PdfMerger()
-    pdf_merger.append(buffer_pdf_base)
+    pdf_merger.append(pdf_html_buffer)
 
     # --- Logo ---
     print(f"[DEBUG] Intentando abrir logo en: {logo_path}")
