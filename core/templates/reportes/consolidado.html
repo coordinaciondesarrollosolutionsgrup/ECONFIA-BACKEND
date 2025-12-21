@@ -108,8 +108,8 @@
 <div class="estadisticas holograma" style="--riesgo-color: {{ color_riesgo }};">
   <h2>Estadísticas del candidato</h2>
   <div class="graficos">
-    <img id="mapa" src="data:image/png;base64,{{ mapa_riesgo }}" alt="Mapa de calor">
-    <img id="bubble" src="data:image/png;base64,{{ bubble_chart }}" alt="Mapa de burbuja">
+    <img id="mapa" src="{{ mapa_riesgo }}" alt="Mapa de calor" style="display:block;margin:0 auto;max-width:350px;max-height:220px;">
+    <img id="bubble" src="{{ bubble_chart }}" alt="Mapa de burbuja" style="display:block;margin:0 auto;max-width:350px;max-height:220px;">
   </div>
 </div>
 
