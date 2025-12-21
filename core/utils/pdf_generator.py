@@ -29,9 +29,9 @@ def generar_pdf_consolidado(resultados, consulta_id):
     from django.contrib.staticfiles import finders
     from weasyprint import HTML, CSS
 
-    css_path = finders.find("css/style.css")
-    if not css_path:
-        raise FileNotFoundError("No se encontró css/style.css via finders.find().")
+    css_path = os.path.join(settings.STATIC_ROOT, "css", "style.css")
+    if not os.path.exists(css_path):
+        raise FileNotFoundError(f"CSS no encontrado en {css_path}")
 
     riesgo = calcular_riesgo_interno(consulta_id)
     mapa_riesgo = generar_mapa_calor_interno(consulta_id) or ""
