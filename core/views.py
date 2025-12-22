@@ -1671,7 +1671,6 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
     # --- Logo y avatar como base64 ---
     import base64
     BASE_STATIC_IMG = os.path.join(settings.BASE_DIR, "core", "static", "img")
-    logo_path = os.path.join(BASE_STATIC_IMG, "logo-removebg-preview.png")
     def file_to_base64(path):
         try:
             with open(path, "rb") as f:
@@ -1679,6 +1678,13 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
         except Exception as e:
             print(f"[WARN] No se pudo abrir {path}: {e}")
             return ""
+    logo_path = os.path.join(BASE_STATIC_IMG, "logo.jpg")
+    # --- Semáforos como base64 ---
+    semaforo_rojo_b64 = file_to_base64(os.path.join(BASE_STATIC_IMG, "semaforo_rojo.png"))
+    semaforo_amarillo_b64 = file_to_base64(os.path.join(BASE_STATIC_IMG, "semaforo_amarillo.png"))
+    semaforo_verde_b64 = file_to_base64(os.path.join(BASE_STATIC_IMG, "semaforo_verde.png"))
+    # Si tienes un gris, usa ese nombre, si no, deja vacío
+    semaforo_gris_b64 = file_to_base64(os.path.join(BASE_STATIC_IMG, "semaforo_gris.png")) if os.path.exists(os.path.join(BASE_STATIC_IMG, "semaforo_gris.png")) else ""
     logo_b64 = file_to_base64(logo_path) if os.path.exists(logo_path) else ""
     sexo = (getattr(candidato, "sexo", "") or "").lower()
     riesgo_categoria = (calcular_riesgo.get("categoria", "")).lower()
@@ -1732,6 +1738,10 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
         },
         "logo_b64": logo_b64,
         "avatar_b64": avatar_b64,
+        "semaforo_rojo_b64": semaforo_rojo_b64,
+        "semaforo_amarillo_b64": semaforo_amarillo_b64,
+        "semaforo_verde_b64": semaforo_verde_b64,
+        "semaforo_gris_b64": semaforo_gris_b64,
     }
 
     templates_por_tipo = {

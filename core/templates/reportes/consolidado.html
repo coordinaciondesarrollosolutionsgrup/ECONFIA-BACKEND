@@ -149,13 +149,13 @@
       <div class="semaforo-container {% ifchanged resultado.tipo_fuente %}first-in-category{% endifchanged %}">
         {% with resultado.score|floatformat:0 as score %}
           {% if score == "4" or score == "5" %}
-            <img src="{% static 'img/semaforo_rojo.png' %}" alt="Alto riesgo">
+            <img src="data:image/png;base64,{{ semaforo_rojo_b64 }}" alt="Alto riesgo">
           {% elif score == "3" %}
-            <img src="{% static 'img/semaforo_amarillo.png' %}" alt="Riesgo medio">
+            <img src="data:image/png;base64,{{ semaforo_amarillo_b64 }}" alt="Riesgo medio">
           {% elif score == "1" or score == "2" %}
-            <img src="{% static 'img/semaforo_verde.png' %}" alt="Bajo riesgo">
+            <img src="data:image/png;base64,{{ semaforo_verde_b64 }}" alt="Bajo riesgo">
           {% else %}
-            <img src="{% static 'img/semaforo_gris.png' %}" alt="Nivel desconocido">
+            <img src="data:image/png;base64,{{ semaforo_gris_b64 }}" alt="Nivel desconocido">
           {% endif %}
         {% endwith %}
         <p>Score obtenido: {{ resultado.score }}</p>
