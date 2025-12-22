@@ -1668,6 +1668,42 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
     except Exception:
         qr_url_absoluta = None
 
+    # --- Logo y avatar como base64 ---
+    import base64
+    BASE_STATIC_IMG = os.path.join(settings.BASE_DIR, "core", "static", "img")
+    logo_path = os.path.join(BASE_STATIC_IMG, "logo-removebg-preview.png")
+    def file_to_base64(path):
+        try:
+            with open(path, "rb") as f:
+                return base64.b64encode(f.read()).decode()
+        except Exception as e:
+            print(f"[WARN] No se pudo abrir {path}: {e}")
+            return ""
+    logo_b64 = file_to_base64(logo_path) if os.path.exists(logo_path) else ""
+    sexo = (getattr(candidato, "sexo", "") or "").lower()
+    riesgo_categoria = (calcular_riesgo.get("categoria", "")).lower()
+    # Mapeo de riesgo a color/archivo
+    riesgo_to_color = {
+        "extremo": "rojo",
+        "alto": "rojo",
+        "medio": "amarillo",
+        "bajo": "verde",
+    }
+    color = riesgo_to_color.get(riesgo_categoria, "")
+    # Convención: placeholder_{color}.png para masculino/otro, placeholder_{color}_femenino.png para femenino
+    if sexo in ["femenino", "f", "mujer"]:
+        if color:
+            foto = f"placeholder_{color}_femenino.png"
+        else:
+            foto = "placeholder_femenino_gris.png"
+    else:
+        if color:
+            foto = f"placeholder_{color}.png"
+        else:
+            foto = "placeholder.png"
+    foto_path = os.path.join(BASE_STATIC_IMG, foto)
+    avatar_b64 = file_to_base64(foto_path) if os.path.exists(foto_path) else ""
+
     context = {
         "mapa_riesgo": mapa_riesgo_path,
         "bubble_chart": bubble_chart_path,
@@ -1694,6 +1730,8 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
             "tipo_persona": getattr(candidato, "tipo_persona", None),
             "sexo": getattr(candidato, "sexo", None),
         },
+        "logo_b64": logo_b64,
+        "avatar_b64": avatar_b64,
     }
 
     templates_por_tipo = {

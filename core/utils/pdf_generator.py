@@ -23,6 +23,28 @@ def generar_pdf_consolidado(resultados, consulta_id):
     print(f"[PDF] Ruta logo: {logo_path}")
     print(f"[PDF] Ruta logo: {logo_path}")
 
+    # --- Logo como base64 ---
+    def file_to_base64(path):
+        try:
+            with open(path, "rb") as f:
+                return base64.b64encode(f.read()).decode()
+        except Exception as e:
+            print(f"[WARN] No se pudo abrir {path}: {e}")
+            return ""
+    logo_b64 = file_to_base64(logo_path) if os.path.exists(logo_path) else ""
+
+    # --- Avatar como base64 ---
+    sexo = (getattr(candidato, "sexo", "") or "").lower()
+    if sexo in ["femenino", "f", "mujer"]:
+        foto = "placeholder_femenino_gris.png"
+    elif sexo in ["masculino", "m", "hombre"]:
+        foto = "placeholder_verde.png"
+    else:
+        foto = "placeholder.png"
+    foto_path = os.path.join(BASE_STATIC_IMG, foto)
+    print(f"[PDF] Ruta avatar: {foto_path}")
+    avatar_b64 = file_to_base64(foto_path) if os.path.exists(foto_path) else ""
+
     styles = getSampleStyleSheet()
     buffer_pdf_base = io.BytesIO()
     doc = SimpleDocTemplate(buffer_pdf_base, pagesize=A4)
@@ -76,28 +98,7 @@ def generar_pdf_consolidado(resultados, consulta_id):
     pdf_merger = PdfMerger()
     pdf_merger.append(buffer_pdf_base)
 
-    # --- Logo ---
-    if os.path.exists(logo_path):
-        print(f"[PDF] Logo encontrado y agregado: {logo_path}")
-        pdf_merger.append(imagen_a_pdf_buffer(logo_path))
-    else:
-        print(f"[PDF] Logo NO encontrado: {logo_path}")
-
-    # --- Avatar según nivel y sexo ---
-    sexo = (getattr(candidato, "sexo", "") or "").lower()
-    if sexo in ["femenino", "f", "mujer"]:
-        foto = "placeholder_femenino_gris.png"
-    elif sexo in ["masculino", "m", "hombre"]:
-        foto = "placeholder_verde.png"
-    else:
-        foto = "placeholder.png"
-    foto_path = os.path.join(BASE_STATIC_IMG, foto)
-    print(f"[PDF] Ruta avatar: {foto_path}")
-    if os.path.exists(foto_path):
-        print(f"[PDF] Avatar encontrado y agregado: {foto_path}")
-        pdf_merger.append(imagen_a_pdf_buffer(foto_path))
-    else:
-        print(f"[PDF] Avatar NO encontrado: {foto_path}")
+    # Logo y avatar ahora están disponibles como logo_b64 y avatar_b64 para usar en HTML/PDF como data:image/png;base64
 
     # --- QR (si existe) ---
     if hasattr(consulta, "consolidado") and consulta.consolidado and getattr(consulta.consolidado, "qr", None):
