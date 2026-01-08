@@ -146,7 +146,7 @@ def uniq_preserve(iterable):
 # Mapa de profesiones y bots a ejecutar (alineado con el frontend)
 PROFESION_BOT_MAP = [
     # Abogado/a
-    (re.compile(r"abogado/a|abogad[oa]", re.I), ["sirna_inscritos_png", "rama_abogado_certificado"]),
+    (re.compile(r"abogado/a|abogad[oa]", re.I), ["sirna_inscritos_png", "rama_abogado_certificado","cndj_antecedentes_disciplinarios"]),
 
     # Economista
     (re.compile(r"economista", re.I), ["conalpe_consulta_inscritos", "conalpe_certificado"]),
@@ -310,8 +310,9 @@ def enviar_email_activacion(user, activation_link):
 @permission_classes([AllowAny])
 def register(request):
     serializer = UserSerializer(data=request.data)
+
     if serializer.is_valid():
-        # Crear usuario inactivo
+        # Crear usuario inactivo (sin enviar correo de activación)
         user = User(
             username=serializer.validated_data["username"],
             email=serializer.validated_data["email"],
@@ -322,21 +323,19 @@ def register(request):
         user.set_password(serializer.validated_data["password"])
         user.save()
 
-        # Generar token de activación
-        token = default_token_generator.make_token(user)
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-
-        activation_link = f"{request.build_absolute_uri('/')}api/activar/{uid}/{token}/"
-
-        # Enviar correo con diseño HTML
-        enviar_email_activacion(user, activation_link)
-
         return Response(
-            {"message": "Usuario creado. Revisa tu correo para activar la cuenta."},
+            {"message": "Usuario creado. Un administrador activará tu cuenta próximamente."},
             status=status.HTTP_201_CREATED,
         )
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+def enviar_email_confirmacion_activacion(user):
+    subject = "Tu cuenta en Econfia ha sido activada"
+    from_email = settings.DEFAULT_FROM_EMAIL
+    to = [user.email]
+    html_content = render_to_string("emails/confirmacion_activacion.html", {"user": user})
+    text_content = strip_tags(html_content)
+    email = EmailMultiAlternatives(subject, text_content, from_email, to)
+    email.attach_alternative(html_content, "text/html")
+    email.send()
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -471,7 +470,7 @@ BOTS_PREMIUM_FIJOS = ['policia_nacional',
 PROFESION_BOT_MAP = [
     #ABOGACÍA (SIRNA: Registro Nacional de Abogados)  — valor sugerido: "abogado(a)"
      (re.compile(r"\babogad[oa]s?\b", re.I),
-     ["sirna_inscritos_png", "rama_abogado_certificado"]),
+     ["sirna_inscritos_png", "rama_abogado_certificado","cndj_antecedentes_disciplinarios"]),
 
      #ECONOMÍA (CONALPE)  — valor sugerido: "economista(s)"
      (re.compile(r"\beconomistas?\b", re.I),
@@ -561,7 +560,9 @@ def api_consultar(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
 
-    duenio_token = token_user.username
+    # Usar el token real de DRF, no el username
+    token_obj = Token.objects.get(user=token_user)
+    duenio_token = token_obj.key
 
     # ---------------------------------------------
     # Parámetros requeridos / opcionales (NUEVO)
@@ -600,9 +601,16 @@ def api_consultar(request):
             if email_param and not (candidato.email or "").strip():
                 candidato.email = email_param
                 campos_a_guardar.append("email")
-            if profesion_param and not (candidato.profesion or "").strip():
-                candidato.profesion = profesion_param
-                campos_a_guardar.append("profesion")
+            # Guardar nueva profesión si no existe en CandidatoProfesion
+            from core.models import CandidatoProfesion
+            if profesion_param:
+                existe = CandidatoProfesion.objects.filter(candidato=candidato, nombre=profesion_param).exists()
+                if not existe:
+                    CandidatoProfesion.objects.create(candidato=candidato, nombre=profesion_param)
+                # Para compatibilidad, actualiza el campo antiguo si está vacío
+                if not (candidato.profesion or "").strip():
+                    candidato.profesion = profesion_param
+                    campos_a_guardar.append("profesion")
             if campos_a_guardar:
                 candidato.save(update_fields=campos_a_guardar)
 
@@ -616,6 +624,8 @@ def api_consultar(request):
                 "tipo_persona": candidato.tipo_persona,
                 "sexo": candidato.sexo,
                 "email": candidato.email,    
+                # Devuelve todas las profesiones asociadas
+                "profesiones": list(candidato.profesiones.values_list("nombre", flat=True)),
                 "profesion": candidato.profesion,
             }
             if fecha_expedicion_req:
@@ -2139,10 +2149,7 @@ def vista_resumen_consulta_pdf(request, consulta_id):
         base_url=request.build_absolute_uri()
     ).write_pdf()
 
-    # 🔹 Respondemos el PDF en navegador
-    response = HttpResponse(pdf_file, content_type="application/pdf")
-    response["Content-Disposition"] = f'inline; filename="resumen_consulta_{consulta_id}.pdf"'
-    return response
+    
     # Traemos la consulta
     consulta = get_object_or_404(Consulta, id=consulta_id)
 

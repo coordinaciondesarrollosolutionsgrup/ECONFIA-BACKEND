@@ -1,11 +1,17 @@
 import os
 import re
+import unicodedata
+import logging
+import random
 import asyncio
 from datetime import datetime
+from pathlib import Path
+from core.resolver.captcha_v2 import resolver_captcha_v2
 
 from django.conf import settings
 from asgiref.sync import sync_to_async
-from playwright.async_api import async_playwright, TimeoutError as PWTimeout
+from playwright.async_api import async_playwright, TimeoutError
+
 
 from core.models import Resultado, Fuente
 
@@ -55,10 +61,28 @@ async def consultar_colfondos_cert_afiliacion(cedula: str, tipo_doc: str, consul
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     fuente_obj = await sync_to_async(Fuente.objects.filter(nombre=NOMBRE_SITIO).first)()
+    # Obtener el objeto Consulta correspondiente
+    from core.models import Consulta
+    consulta_obj = await sync_to_async(Consulta.objects.get)(id=consulta_id)
 
     tipo_label = TIPO_DOC_MAP.get(str(tipo_doc).upper())
     if not tipo_label:
         raise ValueError(f"Tipo de documento no válido para Colfondos: {tipo_doc}")
+
+    # Mapeo de valores para el select real
+    SELECT_VALUE_MAP = {
+        "Cédula de Ciudadanía": "C.C",
+        "Cédula de Extranjería": "C.E",
+        "Nit": "NIT",
+        "Registro Civil": "R.C",
+        "Pasaporte": "PAS",
+        "Tarjeta de Identidad": "T.I",
+        "Permiso especial de permanencia": "PEP",
+        "Protección Temporal": "P.T",
+    }
+    tipo_value = SELECT_VALUE_MAP.get(tipo_label)
+    if not tipo_value:
+        raise ValueError(f"No se encontró el valor para el tipo de documento: {tipo_label}")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -79,66 +103,64 @@ async def consultar_colfondos_cert_afiliacion(cedula: str, tipo_doc: str, consul
             # Colfondos es React: buscamos un select y un input de documento
             await page.wait_for_timeout(1500)
 
-            # 1) Abrir selector tipo doc (robusto)
-            # Intento A: <select>
-            select_candidates = [
-                "select",
-                'select[name*="document"]',
-                'select[id*="document"]',
-                'select[id*="tipo"]',
-            ]
-            selected = False
-            for sel in select_candidates:
-                try:
-                    if await page.locator(sel).count() > 0:
-                        await page.locator(sel).first.select_option(label=tipo_label)
-                        selected = True
-                        break
-                except Exception:
-                    pass
 
-            # Intento B: combobox (div role=combobox)
-            if not selected:
-                # abrir dropdown
-                await page.locator('[role="combobox"]').first.click(timeout=8000)
-                await page.locator(f'text={tipo_label}').first.click(timeout=8000)
+            # 1) Seleccionar tipo de documento
+            await page.wait_for_selector('#select_TipoDoc', timeout=10000)
+            await page.select_option('#select_TipoDoc', value=tipo_value)
 
-            # 2) Número documento
-            input_candidates = [
-                'input[type="text"]',
-                'input[inputmode="numeric"]',
-                'input[placeholder*="Número"]',
-                'input[aria-label*="Número"]',
-            ]
-            doc_input = None
-            for sel in input_candidates:
-                if await page.locator(sel).count() > 0:
-                    doc_input = page.locator(sel).first
-                    break
-            if not doc_input:
-                raise Exception("No se encontró el input de número de documento (Colfondos).")
+            # 2) Llenar número de documento
+            await page.wait_for_selector('#input_Identificacion', timeout=10000)
+            await page.fill('#input_Identificacion', str(cedula))
 
-            await doc_input.fill(str(cedula))
 
-            # 3) Botón generar/enviar
-            btn_candidates = [
-                'button:has-text("Generar")',
-                'button:has-text("Enviar")',
-                'button:has-text("Solicitar")',
-                'button:has-text("Continuar")',
-                'input[type="submit"]',
-            ]
-            clicked = False
-            for sel in btn_candidates:
-                try:
-                    if await page.locator(sel).count() > 0:
-                        await page.locator(sel).first.click(timeout=12000)
-                        clicked = True
-                        break
-                except Exception:
-                    pass
-            if not clicked:
-                raise Exception("No se encontró botón para generar/enviar certificado (Colfondos).")
+            # 2.5) Resolver reCAPTCHA si existe
+            try:
+                # Buscar el sitekey en el iframe o div del captcha
+                iframe = await page.query_selector('iframe[title="reCAPTCHA"]')
+                if iframe:
+                    src = await iframe.get_attribute('src')
+                    import urllib.parse
+                    params = urllib.parse.parse_qs(urllib.parse.urlparse(src).query)
+                    sitekey = params.get('k', [None])[0]
+                    print(f"[Colfondos] Sitekey detectado: {sitekey}")
+                    if sitekey:
+                        # Simular click en el iframe del captcha para mayor realismo
+                        try:
+                            box = await iframe.bounding_box()
+                            if box:
+                                await page.mouse.click(box['x'] + box['width']/2, box['y'] + box['height']/2)
+                                await page.wait_for_timeout(1000)
+                        except Exception as click_ex:
+                            print(f"[Colfondos] No se pudo simular click en el captcha: {click_ex}")
+                        token = await resolver_captcha_v2(sitekey, page.url)
+                        print(f"[Colfondos] Token captcha recibido: {token}")
+                        # Inyectar el token en todos los textareas con clase g-recaptcha-response y disparar eventos
+                        await page.evaluate('''(token) => {
+                            let textareas = document.querySelectorAll('textarea.g-recaptcha-response');
+                            textareas.forEach(ta => {
+                                ta.value = token;
+                                ta.innerHTML = token;
+                                ta.dispatchEvent(new Event('input', { bubbles: true }));
+                                ta.dispatchEvent(new Event('change', { bubbles: true }));
+                            });
+                        }''', token)
+                        # Esperar más tiempo para que el JS procese el token
+                        await page.wait_for_timeout(4000)
+                        # Verificar si el iframe del captcha sigue visible
+                        iframe_visible = await page.evaluate('''() => {
+                            const iframe = document.querySelector('iframe[title="reCAPTCHA"]');
+                            if (!iframe) return false;
+                            const style = window.getComputedStyle(iframe);
+                            return style && style.display !== 'none' && style.visibility !== 'hidden' && iframe.offsetParent !== null;
+                        }''')
+                        print(f"[Colfondos] ¿Iframe captcha sigue visible tras inyección?: {iframe_visible}")
+            except Exception as ex:
+                print(f"[Colfondos] Error resolviendo captcha: {ex}")
+
+
+            # 3) Botón enviar certificación (input con id)
+            await page.wait_for_selector('#btnSendCertification', timeout=10000)
+            await page.click('#btnSendCertification')
 
             # 4) Esperar feedback (toast / texto)
             await page.wait_for_timeout(2500)
@@ -167,7 +189,7 @@ async def consultar_colfondos_cert_afiliacion(cedula: str, tipo_doc: str, consul
 
             if fuente_obj:
                 await sync_to_async(Resultado.objects.create)(
-                    consulta_id=consulta_id,
+                    consulta=consulta_obj,
                     fuente=fuente_obj,
                     score=0,
                     estado="Validado",
@@ -184,7 +206,7 @@ async def consultar_colfondos_cert_afiliacion(cedula: str, tipo_doc: str, consul
 
             if fuente_obj:
                 await sync_to_async(Resultado.objects.create)(
-                    consulta_id=consulta_id,
+                    consulta=consulta_obj,
                     fuente=fuente_obj,
                     score=0,
                     estado="Sin validar",

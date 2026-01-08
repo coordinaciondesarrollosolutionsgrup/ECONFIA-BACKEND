@@ -32,8 +32,8 @@
   .page{
     width: 210mm;
     height: 297mm;
-background: #073333;
-background: linear-gradient(180deg,rgb(2, 1, 21) 0%, rgb(1, 26, 49) 50%, rgba(5, 2, 31, 1) 100%);
+    background: #073333;  
+    background: linear-gradient(180deg,rgb(2, 1, 21) 0%, rgb(1, 26, 49) 50%, rgba(5, 2, 31, 1) 100%);
     page-break-after: always;
     box-sizing: border-box;
     display: flex;
@@ -59,7 +59,7 @@ background: linear-gradient(180deg,rgb(2, 1, 21) 0%, rgb(1, 26, 49) 50%, rgba(5,
   }
 
   .cabecera-izq{
-    width: 70mm;
+    width: 50mm;
     height: 30mm;
     display: flex;
     align-items: center;
@@ -67,8 +67,8 @@ background: linear-gradient(180deg,rgb(2, 1, 21) 0%, rgb(1, 26, 49) 50%, rgba(5,
   }
 
   .cabecera-izq img{
-    width: 30mm;
-    height: 100%;
+    width: 50mm;
+    height: 90%;
     object-fit: contain;
     border-radius: 100%;
     background: #ffffff;
@@ -592,6 +592,5 @@ background: linear-gradient(180deg,rgb(2, 1, 21) 0%, rgb(1, 26, 49) 50%, rgba(5,
   border-radius: 10px;
   background: rgba(0,0,0,.15);
 }
-
-
+}
 

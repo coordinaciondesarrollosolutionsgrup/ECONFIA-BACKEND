@@ -101,10 +101,21 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # --------------------------------------------------
 # DATABASE (SQLITE – PRODUCCIÓN TEMPORAL)
 # --------------------------------------------------
+#DATABASES = {
+#    "default": {
+#        "ENGINE": "django.db.backends.sqlite3",
+#        "NAME": BASE_DIR / "db.sqlite3",
+#    }
+#}
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": config("DB_NAME"),
+        "USER": config("DB_USER"),
+        "PASSWORD": config("DB_PASSWORD"),
+        "HOST": config("DB_HOST", default="127.0.0.1"),
+        "PORT": config("DB_PORT", cast=int, default=5432),
+        "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", cast=int, default=60),
     }
 }
 
@@ -149,6 +160,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # --------------------------------------------------
 # CELERY / REDIS
 # --------------------------------------------------
+
+# --------------------------------------------------
+# API TOKEN PARA CONSOLIDADO
+# --------------------------------------------------
+API_TOKEN = config("API_TOKEN", default="")
+
 CELERY_BROKER_URL = config(
     "BROKER_URL",
     default="redis://127.0.0.1:6379/0"
@@ -163,3 +180,10 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "America/Bogota"
 
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = "econfia18@gmail.com"
+EMAIL_HOST_PASSWORD = "diyb mzdr qhqy banj"
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER

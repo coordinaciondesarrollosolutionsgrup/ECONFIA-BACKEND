@@ -1,4 +1,3 @@
-
 import os
 import asyncio
 import itertools
@@ -6,7 +5,7 @@ import inspect
 from playwright.async_api import async_playwright
 from django.conf import settings
 from celery import shared_task
-from .models import Consulta, Resultado
+from core.models import Consulta, Resultado, Fuente
 from .bots.bot_configs import get_bot_configs
 from .bots.bot_configs_contratista import get_bot_configs_contratista
 from asgiref.sync import async_to_sync
@@ -75,35 +74,21 @@ def procesar_consulta(consulta_id, datos):
     datos.setdefault('rutas', {})
 
 
-
-    # --- SEPARACIÓN REAL DE BOTS RÁPIDOS Y LENTOS ---
-    SLOW_BOT_NAMES = {
-        "ruaf", "contraloria", "simit", "porvenir", "runt", "inpec", "sisben",
-        "antecedentes_fiscales", "procuraduria", "policia_nacional", "movilidad_bogota"
-    }
+    # --- EJECUTAR TODOS LOS BOTS EN PARALELO EN LOTES, IGUAL QUE CONTRATISTA ---
     bot_configs_all = get_bot_configs(consulta_id, datos)
-    FAST_BOTS = []
-    SLOW_BOTS = []
-    for bot in bot_configs_all:
-        if bot["name"] in SLOW_BOT_NAMES:
-            SLOW_BOTS.append(bot)
-        else:
-            FAST_BOTS.append(bot)
-
-    # --- SOLO FAST_BOTS EN EL FLUJO PRINCIPAL ---
     total_start = perf_counter()
     async def main_bots():
         try:
-            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '50'))
+            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '50')) if os.environ.get('BOT_BATCH_SIZE') else 50
         except Exception:
             batch_size = 50
-        print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
+        print(f"[task] Ejecutando TODOS los bots en lotes de tamaño={batch_size}")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            for batch in chunked(FAST_BOTS, batch_size):
+            for batch in chunked(bot_configs_all, batch_size):
                 batch_start = perf_counter()
                 await asyncio.gather(
-                    *(run_bot({**bot, "browser": browser}) for bot in batch)
+                    *(run_bot({**bot, "browser": browser}, timeout=60) for bot in batch)
                 )
                 print(f"[BATCH] terminó en {perf_counter() - batch_start:.2f}s")
             await browser.close()
@@ -111,10 +96,18 @@ def procesar_consulta(consulta_id, datos):
     async_to_sync(main_bots)()
     print(f"[CONSULTA {consulta_id}] TOTAL → {perf_counter() - total_start:.2f}s")
 
-    # --- EJECUTAR LOS LENTOS EN OTRA TASK CELERY (DE VERDAD) ---
-    for bot in SLOW_BOTS:
-        ejecutar_bot_lento.delay(bot["name"], consulta_id, datos)
-        print(f"[BACKGROUND] Bot lento '{bot['name']}' programado para ejecución en background")
+    # --- SOLO AHORA marcar consulta como completada y generar el PDF/consolidado ---
+    consulta = Consulta.objects.get(id=consulta_id)
+    consulta.estado = 'completado'
+    consulta.save()
+    try:
+        token = datos.get("duenio_token")
+        print(f"[DEBUG] Token recibido para consulta {consulta_id}: '{token}' (procesar_consulta)")
+        if not token:
+            print(f"[Consolidado] ⚠️ No se encontró 'duenio_token' en datos para consulta {consulta_id}. Usando token vacío.")
+        _llamar_consolidado_sincrono(consulta_id, token)
+    except Exception as e:
+        print(f"[Consolidado] Error general llamando a las APIs de consolidado para consulta {consulta_id}: {e}")
 @shared_task
 
 
@@ -123,7 +116,6 @@ def ejecutar_bot_lento(bot_name, consulta_id, datos):
     import asyncio, inspect
     from time import perf_counter
     from playwright.async_api import async_playwright
-    from .models import Consulta
     from .bots.bot_configs import get_bot_configs
 
     # Obtener la instancia de Consulta
@@ -148,11 +140,11 @@ def ejecutar_bot_lento(bot_name, consulta_id, datos):
                     kwargs["browser"] = browser
                 await asyncio.wait_for(
                     func(**kwargs),
-                    timeout=120
+                    timeout=180
                 )
                 await browser.close()
         except asyncio.TimeoutError:
-            print(f"⛔ BOT {bot.get('name', func.__name__)} cancelado por timeout (120s)")
+            print(f"⛔ BOT {bot.get('name', func.__name__)} cancelado por timeout (180s)")
         except Exception as e:
             print(f"❌ Error en bot {bot.get('name', func.__name__)}: {e}")
         finally:
@@ -163,32 +155,15 @@ def ejecutar_bot_lento(bot_name, consulta_id, datos):
     consulta.estado = 'completado'
     consulta.save()
 
-    async def llamar_consolidado():
-        headers = {
-            "Authorization": "Token e48c48a21bbe510fadf2073ddc5e70c0a2db2827"
-        }
-        urls = [
-            f"https://econfia.co/api/generar_consolidado/{consulta_id}/1/",
-            f"https://econfia.co/api/generar_consolidado/{consulta_id}/3/",
-        ]
-        async with httpx.AsyncClient(timeout=9999) as client:
-            results = await asyncio.gather(
-                *(client.post(url, headers=headers) for url in urls),
-                return_exceptions=True
-            )
-            for url, r in zip(urls, results):
-                if isinstance(r, Exception):
-                    print(f"❌ Error llamando a {url}: {r}")
-                else:
-                    try:
-                        print(f"Consolidado generado en {url}: {r.json()}")
-                    except Exception:
-                        print(f"Consolidado generado en {url}: status={r.status_code}")
-
+    # Llamada robusta y única a la generación automática del consolidado
     try:
-        async_to_sync(llamar_consolidado)()
+        token = datos.get("duenio_token")
+        print(f"[DEBUG] Token recibido para consulta {consulta_id}: '{token}' (procesar_consulta_por_nombres)")
+        if not token:
+            print(f"[Consolidado] ⚠️ No se encontró 'duenio_token' en datos para consulta {consulta_id}. Usando token vacío.")
+        _llamar_consolidado_sincrono(consulta_id, token)
     except Exception as e:
-        print(f"Error general llamando a las APIs: {e}")
+        print(f"[Consolidado] Error general llamando a las APIs de consolidado para consulta {consulta_id}: {e}")
         
 @shared_task
 def procesar_consulta_por_nombres(consulta_id, datos, lista_nombres):
@@ -225,10 +200,11 @@ def procesar_consulta_por_nombres(consulta_id, datos, lista_nombres):
 
     total_start = perf_counter()
     async def main_bots():
+        # Puedes ajustar BOT_BATCH_SIZE en tu entorno para controlar cuántos bots se lanzan en paralelo
         try:
-            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '40'))
+            batch_size = int(os.environ.get('BOT_BATCH_SIZE', '30'))  # Valor por defecto aumentado a 30
         except Exception:
-            batch_size = 40
+            batch_size = 30
         print(f"[task] Ejecutando bots en lotes de tamaño={batch_size}")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -240,35 +216,44 @@ def procesar_consulta_por_nombres(consulta_id, datos, lista_nombres):
                 print(f"[BATCH] terminó en {perf_counter() - batch_start:.2f}s")
             await browser.close()
 
+# === OPTIMIZACIÓN CELERY ===
+# Para aprovechar PostgreSQL y hardware moderno, puedes lanzar Celery con más concurrencia:
+# celery -A backend worker --loglevel=info --pool=threads --concurrency=8
+# O más, según tu CPU/RAM. Ajusta BOT_BATCH_SIZE y la concurrencia de Celery para máximo rendimiento.
+
     async_to_sync(main_bots)()
     print(f"[CONSULTA {consulta_id}] TOTAL → {perf_counter() - total_start:.2f}s")
 
     consulta.estado = 'completado'
     consulta.save()
 
-    # async def llamar_consolidado():
-    #     headers = {
-    #         "Authorization": "Token e48c48a21bbe510fadf2073ddc5e70c0a2db2827"
-    #     }
-    #     urls = [
-    #         f"https://econfia.co/api/generar_consolidado/{consulta_id}/1/",
-    #         f"https://econfia.co/api/generar_consolidado/{consulta_id}/3/",
-    #     ]
-    #     async with httpx.AsyncClient(timeout=9999) as client:
-    #         results = await asyncio.gather(
-    #             *(client.post(url, headers=headers) for url in urls),
-    #             return_exceptions=True
-    #         )
-    #         for url, r in zip(urls, results):
-    #             if isinstance(r, Exception):
-    #                 print(f"Error llamando a {url}: {r}")
-    #             else:
-    #                 print(f"Consolidado generado en {url}: {r.json()}")
 
-    # try:
-    #     async_to_sync(llamar_consolidado)()
-    # except Exception as e:
-    #     print(f"Error general llamando a las APIs: {e}")
+
+    async def llamar_consolidado( token: str = None):
+        headers = {
+            "Authorization": f"Token {token}" if token else ""
+        }
+        print(f"\n\n[DEBUG CONSOLIDADO] Header Authorization que se enviará: '{headers['Authorization']}' para consulta {consulta_id}\n\n")
+        urls = [
+            f"http://127.0.0.1:8000/api/generar_consolidado/{consulta_id}/1/",
+            f"http://127.0.0.1:8000/api/generar_consolidado/{consulta_id}/3/",
+        ]
+        async with httpx.AsyncClient(timeout=9999) as client:
+            results = await asyncio.gather(
+                *(client.post(url, headers=headers) for url in urls),
+                return_exceptions=True
+            )
+            for url, r in zip(urls, results):
+                if isinstance(r, Exception):
+                    print(f"Error llamando a {url}: {r}")
+                else:
+                    print(f"Consolidado generado en {url}: {r.json()}")
+
+    try:
+        token = datos.get("duenio_token")
+        async_to_sync(llamar_consolidado)(token)
+    except Exception as e:
+        print(f"Error general llamando a las APIs: {e}")
 
         
 from celery import shared_task
@@ -285,6 +270,14 @@ def reintentar_bot(resultado_id):
     original = Resultado.objects.get(id=resultado_id)
     consulta = original.consulta
     candidato = consulta.candidato
+
+    # Límite de reintentos
+    MAX_REINTENTOS = 2
+    if original.intentos >= MAX_REINTENTOS:
+        original.estado = "fallido"
+        original.mensaje = f"Se alcanzó el máximo de reintentos ({MAX_REINTENTOS}) para este bot."
+        original.save()
+        return original.mensaje
 
     # ============================
     # 🔥 FIX 1 — Validar fuente antes de usarla
@@ -359,6 +352,10 @@ def reintentar_bot(resultado_id):
 
     mensaje_final = ""
     try:
+        # Incrementar el contador de reintentos
+        original.intentos += 1
+        original.save()
+
         async_to_sync(bot["func"])(**(bot.get("kwargs") or {}))
 
         nuevos_qs = Resultado.objects.filter(
@@ -386,34 +383,34 @@ def reintentar_bot(resultado_id):
     return mensaje_final
 
 
-def _llamar_consolidado_sincrono(consulta_id: int):
+def _llamar_consolidado_sincrono(consulta_id: int, token: str = None):
     """Wrapper síncrono para lanzar las llamadas async a los consolidados."""
     try:
-        async_to_sync(_llamar_consolidado_async)(consulta_id)
+        async_to_sync(_llamar_consolidado_async)(consulta_id, token)
     except Exception as e:
         # No levantamos excepción para no romper la tarea; sólo logueamos.
         print(f"Error general llamando a las APIs de consolidado para consulta {consulta_id}: {e}")
 
 
-async def _llamar_consolidado_async(consulta_id: int):
+async def _llamar_consolidado_async(consulta_id: int, token: str = None):
     headers = {
-        # ⚠️ Considera mover este token a settings/variables de entorno
-        "Authorization": "Token e48c48a21bbe510fadf2073ddc5e70c0a2db2827"
+        "Authorization": f"Token {token}" if token else ""
     }
+    if not token:
+        print(f"[Consolidado] ⚠️ No se recibió token para consulta {consulta_id}. El header irá vacío.")
+    print(f"\n\n[DEBUG CONSOLIDADO] Header Authorization que se enviará: '{headers['Authorization']}' para consulta {consulta_id}\n\n")
     urls = [
-        f"https://econfia.co/api/generar_consolidado/{consulta_id}/1/",
-        f"https://econfia.co/api/generar_consolidado/{consulta_id}/3/",
+        f"http://127.0.0.1:8000/api/generar_consolidado/{consulta_id}/1/",
+        f"http://127.0.0.1:8000/api/generar_consolidado/{consulta_id}/3/",
     ]
-    async with httpx.AsyncClient(timeout=9999) as client:
-        results = await asyncio.gather(
-            *(client.post(url, headers=headers) for url in urls),
-            return_exceptions=True
-        )
+    async with httpx.AsyncClient(timeout=600) as client:
+        print(f"[DEBUG] Header Authorization enviado: {headers['Authorization']}")
+        tasks = [client.post(url, headers=headers) for url in urls]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         for url, r in zip(urls, results):
             if isinstance(r, Exception):
                 print(f"[Consolidado] Error llamando a {url}: {r}")
             else:
-                # Evita reventar si no es JSON
                 try:
                     print(f"[Consolidado] OK {url}: {r.json()}")
                 except Exception:
@@ -436,6 +433,7 @@ def procesar_consulta_contratista_por_nombres(consulta_id, datos, lista_nombres)
             yield chunk
 
     consulta = Consulta.objects.get(id=consulta_id)
+    print(f"[DEBUG TASK] Token recibido en task procesar_consulta_contratista_por_nombres: '{datos.get('duenio_token')}' para consulta {consulta_id}")
 
     # Fallback si no recibimos datos
     if not datos:
@@ -462,7 +460,7 @@ def procesar_consulta_contratista_por_nombres(consulta_id, datos, lista_nombres)
 
     # 3) Ejecutar en lotes (concurrency control)
     async def main_bots():
-        for batch in chunked(bot_configs, 100):
+        for batch in chunked(bot_configs, 30):
             await asyncio.gather(*(run_bot(b) for b in batch))
 
     async_to_sync(main_bots)()
@@ -470,3 +468,13 @@ def procesar_consulta_contratista_por_nombres(consulta_id, datos, lista_nombres)
     # 4) Marcar consulta como completada
     consulta.estado = "completado"
     consulta.save()
+
+    # Llamada robusta y única a la generación automática del consolidado
+    try:
+        token = datos.get("duenio_token")
+        print(f"[DEBUG] Token recibido para consulta {consulta_id}: '{token}'")
+        if not token:
+            print(f"[Consolidado] ⚠️ No se encontró 'duenio_token' en datos para consulta {consulta_id}. Usando token vacío.")
+        _llamar_consolidado_sincrono(consulta_id, token)
+    except Exception as e:
+        print(f"[Consolidado] Error general llamando a las APIs de consolidado para consulta {consulta_id}: {e}")

@@ -46,5 +46,18 @@ class ResultadoAdmin(admin.ModelAdmin):
 class TipoConsolidadoAdmin(admin.ModelAdmin):
     list_display = ("id", "nombre", "descripcion")
 admin.site.register(models.Consolidado)
-admin.site.register(models.Candidato)
+from django.contrib import admin
+from .models import Candidato, CandidatoProfesion
+
+# Inline para profesiones
+class CandidatoProfesionInline(admin.TabularInline):
+    model = CandidatoProfesion
+    extra = 1
+
+# Admin personalizado para Candidato
+@admin.register(Candidato)
+class CandidatoAdmin(admin.ModelAdmin):
+    inlines = [CandidatoProfesionInline]
+    search_fields = ("cedula", "nombre", "apellido")
+    list_display = ("cedula", "nombre", "apellido", "email")
 admin.site.register(models.Perfil)

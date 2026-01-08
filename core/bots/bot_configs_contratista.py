@@ -52,6 +52,7 @@ from.bancoproveedores_quien_consulto import consultar_quien_consulto
 from.procuraduria_generar_certificado import generar_certificado_procuraduria
 from .contraloria import consultar_contraloria
 from.rama_abogado_certificado import consultar_rama_abogado_certificado
+from.cndj_antecedentes_disciplinarios import consultar_antecedentes_cndj
 from.sideap_comprobante import consultar_sideap_comprobante
 
 
@@ -60,6 +61,11 @@ empresa ="SCS SOLUCIONES GROUP"
 nit = "830512262-1"
 
 def get_bot_configs_contratista(consulta_id, datos):
+    if not datos.get('cedula'):
+        return [{
+            'name': 'error',
+            'error': 'La cédula no fue proporcionada o es incorrecta. Por favor verifique e intente nuevamente.'
+        }]
     return [
         {
             'name': 'sideap_comprobante',
@@ -75,6 +81,15 @@ def get_bot_configs_contratista(consulta_id, datos):
         {
             'name': 'rama_abogado_certificado',
             'func': consultar_rama_abogado_certificado,
+            'kwargs': {
+                'consulta_id': consulta_id,
+                'cedula': datos['cedula'],
+                'tipo_doc': datos['tipo_doc'],
+            }
+        },
+        {
+            'name': 'cndj_antecedentes_disciplinarios',
+            'func': consultar_antecedentes_cndj,
             'kwargs': {
                 'consulta_id': consulta_id,
                 'cedula': datos['cedula'],
