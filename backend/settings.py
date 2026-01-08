@@ -154,6 +154,8 @@ STATIC_ROOT = "/srv/econfia/static"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="https://econfia.co").rstrip("/")
+
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
