@@ -1520,7 +1520,7 @@ def reporte(request, consulta_id):
         raise FileNotFoundError(f"CSS no encontrado: {css_path}")
     pdf = HTML(
         string=html_string,
-        base_url=base_path.as_uri()
+        base_url=getattr(settings, "PUBLIC_BASE_URL", "https://econfia.co") + "/"
     ).write_pdf(
         stylesheets=[CSS(filename=str(css_path))]
     )
