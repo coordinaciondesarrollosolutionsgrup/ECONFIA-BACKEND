@@ -1806,13 +1806,19 @@ def generar_consolidado(request, consulta_id, tipo_id):
         consolidado = generar_consolidado_interno(
             consulta_id, tipo_id, request.user, request=request
         )
+        from urllib.parse import urljoin
+        from django.conf import settings
+        archivo_rel = consolidado.archivo.url if consolidado.archivo else None
+        qr_rel = consolidado.qr.url if consolidado.qr else None
+        archivo_url = urljoin(getattr(settings, "PUBLIC_BASE_URL", "https://econfia.co") + "/", archivo_rel.lstrip("/")) if archivo_rel else None
+        qr_url = urljoin(getattr(settings, "PUBLIC_BASE_URL", "https://econfia.co") + "/", qr_rel.lstrip("/")) if qr_rel else None
         return Response(
             {
                 "status": "success",
                 "message": "Consolidado generado y guardado correctamente.",
                 "consolidado_id": consolidado.id,
-                "archivo_url": consolidado.archivo.url,
-                "qr_url": consolidado.qr.url,
+                "archivo_url": archivo_url,
+                "qr_url": qr_url,
             },
             status=201,
         )
