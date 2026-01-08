@@ -27,7 +27,7 @@ def test_pdf_css(request):
         return HttpResponse(f"CSS no encontrado: {css_path}", status=500)
     pdf = HTML(
         string=html,
-        base_url=base_path.as_uri()
+        base_url=getattr(settings, "PUBLIC_BASE_URL", "https://econfia.co") + "/"
     ).write_pdf(
         stylesheets=[CSS(filename=str(css_path))]
     )
@@ -746,6 +746,10 @@ def api_consultar(request):
         )
 
         # Descontar siempre una consulta
+        if hasattr(perfil, 'consultas_disponibles') and perfil.consultas_disponibles > 0:
+            perfil.consultas_disponibles -= 1
+            perfil.save(update_fields=["consultas_disponibles"])
+        # Si quieres evitar negativos, puedes agregar un else para manejar el caso sin consultas
 
 
         # Enriquecer payload para las tasks
