@@ -1996,17 +1996,26 @@ def generar_consolidado_api(request, consulta_id, tipo_id):
     mapa_riesgo_data = generar_mapa_calor_interno(consulta_id)
     calcular_riesgo = calcular_riesgo_interno_b(consulta_id)
     resultados = listar_resultados_interno(consulta_id)
+    from urllib.parse import urlparse
+    from pathlib import Path
+
+    def media_to_file_uri(url_or_path: str) -> str:
+        path = urlparse(url_or_path).path
+        if path.startswith(settings.MEDIA_URL):
+            rel = path[len(settings.MEDIA_URL):].lstrip("/")
+        else:
+            rel = path.lstrip("/")
+        return (Path(settings.MEDIA_ROOT) / rel).resolve().as_uri()
 
     for r in resultados:
         if r.get("archivo"):
-            relative_path = r["archivo"].replace("\\", "/")
-            r["archivo_url"] = request.build_absolute_uri(
-                settings.MEDIA_URL + relative_path
-            )
+            relative_path = r["archivo"].replace("\\", "/").lstrip("/")
+            r["archivo_url"] = (Path(settings.MEDIA_ROOT) / relative_path).resolve().as_uri()
 
     nivel_color = {"I": "red", "II": "orange", "III": "yellow", "IV": "green"}
     color_riesgo = nivel_color.get(calcular_riesgo.get("nivel_global"), "gray")
 
+    qr_url = media_to_file_uri(qr_url)
     context = {
         "mapa_riesgo": mapa_riesgo_data,
         "resultados": resultados,
