@@ -1673,14 +1673,40 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
     }
     color_riesgo = nivel_color.get(calcular_riesgo.get("categoria"), "gray")
 
-    # Obtener URL del QR de forma segura (puede no existir)
-    try:
-        qr_url_absoluta = (
-            request.build_absolute_uri(consolidado.qr.url) if (request and consolidado.qr and consolidado.qr.name)
-            else (consolidado.qr.url if (consolidado.qr and consolidado.qr.name) else None)
-        )
-    except Exception:
-        qr_url_absoluta = None
+    # --- Construir URLs robustas para QR y archivos (PDF) ---
+    from pathlib import Path
+    from urllib.parse import urljoin
+    # 1. QR: payload (lo que codifica el QR)
+    qr_payload_url = None
+    if consolidado.qr and consolidado.qr.name:
+        if request:
+            qr_payload_url = request.build_absolute_uri(consolidado.qr.url)
+        else:
+            qr_payload_url = consolidado.qr.url
+        # 2. QR: file URI para PDF
+        qr_path = Path(consolidado.qr.path).resolve()
+        qr_image_file_uri = qr_path.as_uri()
+        # 3. QR: URL pública para API/web
+        qr_public_url = urljoin(getattr(settings, "PUBLIC_BASE_URL", "https://econfia.co") + "/", f"media/{consolidado.qr.name}")
+    else:
+        qr_image_file_uri = None
+        qr_public_url = None
+
+    # 4. Resultados: asegurar archivo_url como file://
+    for r in resultados:
+        rel = r.get("archivo")
+        if rel:
+            rel = rel.replace("\\", "/").lstrip("/")
+            if rel.startswith("media/"):
+                rel = rel[len("media/"):]
+            r["archivo_url"] = (Path(settings.MEDIA_ROOT) / rel).resolve().as_uri()
+
+    # 5. Logging temporal para depuración
+    import logging
+    logger = logging.getLogger("consolidado.pdf")
+    logger.warning(f"[PDF] qr_image_file_uri: {qr_image_file_uri}")
+    if resultados:
+        logger.warning(f"[PDF] archivo_url ejemplo: {resultados[0].get('archivo_url')}")
 
     # --- Logo y avatar como base64 ---
     import base64
@@ -1739,7 +1765,7 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
         "usuario": usuario.username if usuario else None,
         "tipo_reporte": tipo.nombre,
         "ip_generacion": request.META.get("REMOTE_ADDR") if request else None,
-        "qr_url": qr_url_absoluta,
+        "qr_url": qr_image_file_uri,  # file://... para PDF
         "candidato": {
             "cedula": candidato.cedula,
             "tipo_doc": getattr(candidato, "tipo_doc", None),
