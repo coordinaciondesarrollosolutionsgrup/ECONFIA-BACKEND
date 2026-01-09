@@ -1692,7 +1692,7 @@ def generar_consolidado_interno(consulta_id, tipo_id, usuario, request=None):
         except Exception as e:
             print(f"[WARN] No se pudo abrir {path}: {e}")
             return ""
-    logo_path = os.path.join(BASE_STATIC_IMG, "logo.jpg")
+    logo_path = os.path.join(BASE_STATIC_IMG, "logo-econfia.png")
     # --- Semáforos como base64 ---
     semaforo_rojo_b64 = file_to_base64(os.path.join(BASE_STATIC_IMG, "semaforo_rojo.png"))
     semaforo_amarillo_b64 = file_to_base64(os.path.join(BASE_STATIC_IMG, "semaforo_amarillo.png"))
@@ -2129,6 +2129,8 @@ def vista_resumen_consulta_pdf(request, consulta_id):
     calcular_riesgo = calcular_riesgo_interno_b(consulta_id)
     resultados = listar_resultados_interno(consulta_id)
 
+    base_publica = settings.PUBLIC_BASE_URL.rstrip("/")
+
     for r in resultados:
         if r.get("archivo") and request:
             relative_path = r["archivo"].replace("\\", "/")
@@ -2156,7 +2158,7 @@ def vista_resumen_consulta_pdf(request, consulta_id):
     # 🔹 Generamos el PDF
     pdf_file = HTML(
         string=html_string,
-        base_url=request.build_absolute_uri()
+        base_url=base_publica + "/",
     ).write_pdf()
 
     
@@ -2516,7 +2518,7 @@ def test_pdf_consolidado(request):
     # Logo y foto de candidato (usa tus rutas reales de estáticos recolectados)
     import os
     static_img = os.path.join(settings.STATIC_ROOT, "img")
-    logo_path = os.path.join(static_img, "logo.jpg")
+    logo_path = os.path.join(static_img, "logo-econfia.png")
     foto_path = os.path.join(static_img, "placeholder_verde.png")
     print(f"[DEBUG] STATIC_ROOT: {settings.STATIC_ROOT}")
     print(f"[DEBUG] logo_path: {logo_path} exists: {os.path.exists(logo_path)}")

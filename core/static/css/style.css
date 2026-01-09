@@ -67,8 +67,8 @@
   }
 
   .cabecera-izq img{
-    width: 50mm;
-    height: 90%;
+    width: 30mm;
+    height: 100%;
     object-fit: contain;
     border-radius: 100%;
     background: #ffffff;
