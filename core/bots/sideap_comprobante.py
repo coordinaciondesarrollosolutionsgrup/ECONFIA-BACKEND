@@ -1,3 +1,4 @@
+from typing import Optional
 # core/bots/sideap_comprobante.py
 import os
 import re
@@ -70,7 +71,7 @@ def _norm_fecha_ddmmyy(s) -> str:
     s = str(s).strip()
     s_norm = s.replace(".", "/").replace("-", "/").replace("\\", "/")
 
-    def _try_parse(val: str, fmts: list[str]) -> str | None:
+    def _try_parse(val: str, fmts: list[str]) -> Optional[str]:
         for f in fmts:
             try:
                 return datetime.strptime(val, f).strftime("%d/%m/%y")
@@ -152,8 +153,20 @@ async def consultar_sideap_comprobante(
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(
-                headless=False,
-                args=["--disable-blink-features=AutomationControlled", "--window-position=2000,0"]
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-web-security",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--disable-infobars",
+                    "--window-size=1920,1080",
+                    "--start-maximized",
+                    "--disable-site-isolation-trials",
+                    "--disable-features=VizDisplayCompositor",
+                ]
             )
             context = await browser.new_context(locale="es-CO", viewport={"width": 1366, "height": 1000})
             page = await context.new_page()

@@ -22,7 +22,6 @@
     {% if color_riesgo == 'yellow' %}
       /* Amarillos quemados: dorado -> ámbar -> naranja tostado */
       background:
-        radial-gradient(1200px 600px at 100% -20%, rgba(0,0,0,.18), transparent 60%),
         linear-gradient(115deg,
           #FFE500 0%,
           #FFC400 22%,
@@ -32,7 +31,6 @@
     {% elif color_riesgo == 'green' %}
       /* Verdes vivos: lima -> esmeralda -> petróleo */
       background:
-        radial-gradient(1200px 600px at -10% 120%, rgba(0,0,0,.18), transparent 60%),
         linear-gradient(115deg,
           #00E676 0%,
           #00D45E 20%,
@@ -42,7 +40,6 @@
     {% elif color_riesgo == 'red' %}
       /* Rojos “quemados”: coral -> rojo vivo -> carmín oscuro */
       background:
-        radial-gradient(1200px 600px at 0% -10%, rgba(0,0,0,.20), transparent 60%),
         linear-gradient(115deg,
           #FF512F 0%,
           #FF2D20 22%,
@@ -54,7 +51,7 @@
     {% endif %}
   ">
   <div class="cabecera-izq">
-    <img src="{% static 'img/logo.jpg' %}" alt="Logo">
+    <img src="data:image/png;base64,{{ logo_b64 }}">
     <span class="nombre"></span>
   </div>
   <div class="cabecera-der">
@@ -72,31 +69,7 @@
 
     <!-- Perfil -->
     <div class="perfil" style="border: 10px solid {{ color_riesgo }};">
-      {% if riesgo.categoria == "Bajo" %}
-        {% if candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
-          <img src="{% static 'img/placeholder_femenino_verde.png' %}" alt="Foto candidata">
-        {% else %}
-          <img src="{% static 'img/placeholder_verde.png' %}" alt="Foto candidato">
-        {% endif %}
-      {% elif riesgo.categoria == "Alto" %}
-        {% if candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
-          <img src="{% static 'img/placeholder_femenino_rojo.png' %}" alt="Foto candidata">
-        {% else %}
-          <img src="{% static 'img/placeholder_rojo.png' %}" alt="Foto candidato">
-        {% endif %}
-      {% elif riesgo.categoria == "Medio" %}
-        {% if candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
-          <img src="{% static 'img/placeholder_femenino_amarillo.png' %}" alt="Foto candidata">
-        {% else %}
-          <img src="{% static 'img/placeholder_amarillo.png' %}" alt="Foto candidato">
-        {% endif %}
-      {% else %}
-        {% if candidato.sexo|lower == "femenino" or candidato.sexo|lower == "f" or candidato.sexo|lower == "mujer" %}
-          <img src="{% static 'img/placeholder_femenino_gris.png' %}" alt="Foto candidata">
-        {% else %}
-          <img src="{% static 'img/placeholder_gris.png' %}" alt="Foto candidato">
-        {% endif %}
-      {% endif %}
+      <img src="data:image/png;base64,{{ avatar_b64 }}" alt="Foto candidato">
     </div>
 
 
@@ -173,13 +146,13 @@
       <div class="semaforo-container {% ifchanged resultado.tipo_fuente %}first-in-category{% endifchanged %}">
         {% with resultado.score|floatformat:0 as score %}
           {% if score == "4" or score == "5" %}
-            <img src="{% static 'img/semaforo_rojo.png' %}" alt="Alto riesgo">
+            <img src="data:image/png;base64,{{ semaforo_rojo_b64 }}" alt="Alto riesgo">
           {% elif score == "3" %}
-            <img src="{% static 'img/semaforo_amarillo.png' %}" alt="Riesgo medio">
+            <img src="data:image/png;base64,{{ semaforo_amarillo_b64 }}" alt="Riesgo medio">
           {% elif score == "1" or score == "2" %}
-            <img src="{% static 'img/semaforo_verde.png' %}" alt="Bajo riesgo">
+            <img src="data:image/png;base64,{{ semaforo_verde_b64 }}" alt="Bajo riesgo">
           {% else %}
-            <img src="{% static 'img/semaforo_gris.png' %}" alt="Nivel desconocido">
+            <img src="data:image/png;base64,{{ semaforo_gris_b64 }}" alt="Nivel desconocido">
           {% endif %}
         {% endwith %}
         <p>Score obtenido: {{ resultado.score }}</p>

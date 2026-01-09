@@ -1,295 +1,215 @@
-#     # core/bots/skandia_certificados.py
-# import os
-# import re
-# import asyncio
-# from datetime import datetime, date
+import os
+import re
+import random
+import asyncio
+import logging
+from datetime import datetime, date
+from pathlib import Path
 
-# from django.conf import settings
-# from asgiref.sync import sync_to_async
-# from playwright.async_api import async_playwright
+from django.conf import settings
+from asgiref.sync import sync_to_async
+from playwright.async_api import async_playwright, TimeoutError
 
-# from core.models import Resultado, Fuente
-# from core.resolver.captcha_v2 import resolver_captcha_v2  # el mismo helper que usas en otros bots
+from core.models import Resultado, Fuente
+from core.resolver.captcha_v2 import resolver_captcha_v2
 
-# URL = "https://www.skandia.co/consulta-extractos-y-certificados"
-# NOMBRE_SITIO = "skandia_certificados"
+# =========================================================
+# CONFIGURACIÓN GENERAL
+# =========================================================
+URL = "https://www.skandia.co/consulta-extractos-y-certificados"
+NOMBRE_SITIO = "skandia_certificados"
+HEADLESS = False
+MAX_RETRIES = 3
 
-# HEADLESS = False  # pon True cuando termines de probar
+logger = logging.getLogger(__name__)
 
-# # --- Selectores ---
-# SEL_TIPO = "#_com_skandia_co_certificates_web_portlet_SkandiaCoCertificatesWebPortlet_typeDocument"
-# SEL_DOC  = "#_com_skandia_co_certificates_web_portlet_SkandiaCoCertificatesWebPortlet_document"
-# SEL_YEAR = "#_com_skandia_co_certificates_web_portlet_SkandiaCoCertificatesWebPortlet_yearBirth"
-# SEL_BTN  = "#sendCertificate"
+# =========================================================
+# SELECTORES REALES SKANDIA
+# =========================================================
+SEL_TIPO = "#_com_skandia_co_certificates_web_portlet_SkandiaCoCertificatesWebPortlet_typeDocument"
+SEL_DOC  = "#_com_skandia_co_certificates_web_portlet_SkandiaCoCertificatesWebPortlet_document"
+SEL_YEAR = "#_com_skandia_co_certificates_web_portlet_SkandiaCoCertificatesWebPortlet_yearBirth"
+SEL_BTN  = "#sendCertificate"
 
-# SEL_CAPTCHA_ANCHOR_IFRAME = "iframe[src*='recaptcha/api2/anchor']"
-# SEL_CAPTCHA_CONTAINER     = ".g-recaptcha, #g-recaptcha, [data-sitekey]"
+SEL_H3_SUCCESS = "h3:has-text('éxito')"
+SEL_H3_FAIL    = "h3:has-text('fall')"
 
-# # modal de resultado (éxito / falla)
-# SEL_H3_SUCCESS = "h3:has-text('Tu solicitud ha sido enviada con éxito')"
-# SEL_H3_FAIL    = "h3:has-text('Tu solicitud ha fallado')"
+SEL_CAPTCHA_CONTAINER = "[data-sitekey]"
 
-# # mapeo de tipo de documento
-# TIPO_MAP = {
-#     "CC": "C",  # Cédula de ciudadanía
-#     "CE": "E",
-#     "L":  "L",
-#     "M":  "M",
-#     "N":  "N",
-#     "P":  "P",
-#     "R":  "R",
-#     "TI": "T",
-# }
+SITEKEY_FALLBACK = "6Le7iZAgAAAAABS-YU1fbnxjcxEvLtb77q4Z_YvK"
 
-# # sitekey visible en la página (fallback si no se puede leer dinámicamente)
-# SITEKEY_FALLBACK = "6Le7iZAgAAAAABS-YU1fbnxjcxEvLtb77q4Z_YvK"
+# =========================================================
+# MAPAS
+# =========================================================
+TIPO_MAP = {
+    "CC": "C",
+    "CE": "E",
+    "TI": "T",
+    "PA": "P",
+    "RC": "R",
+}
 
-
-# def _year_only(fecha_nacimiento) -> str:
-#     """Acepta date, datetime o string y devuelve AAAA."""
-#     if isinstance(fecha_nacimiento, (datetime, date)):
-#         return f"{fecha_nacimiento.year:04d}"
-#     if isinstance(fecha_nacimiento, str):
-#         s = fecha_nacimiento.strip()
-#         # intenta detectar AAAA o dd/mm/aa/aaaa
-#         m = re.search(r"(\d{4})", s)
-#         if m:
-#             return m.group(1)
-#         m2 = re.search(r"\b(\d{2})/(\d{2})/(\d{2})\b", s)  # dd/mm/aa
-#         if m2:
-#             aa = int(m2.group(3))
-#             return f"20{aa:02d}" if aa <= 30 else f"19{aa:02d}"
-#     # último recurso: vacío para que el campo quede en rojo y tengamos evidencia
-#     return ""
-
-
-# async def _crear_resultado(consulta_id, fuente, estado, mensaje, archivo, score=1):
-#     rel = archivo.replace("\\", "/") if archivo else ""
-#     await sync_to_async(Resultado.objects.create)(
-#         consulta_id=consulta_id,
-#         fuente=fuente,
-#         estado=estado,
-#         mensaje=mensaje,
-#         archivo=rel,
-#         score=score,
-#     )
+# =========================================================
+# HELPERS
+# =========================================================
+def year_only(fecha):
+    if isinstance(fecha, (datetime, date)):
+        return str(fecha.year)
+    if isinstance(fecha, str):
+        m = re.search(r"\d{4}", fecha)
+        if m:
+            return m.group(0)
+    return ""
 
 
-# async def consultar_skandia_certificados(
-#     consulta_id: int,
-#     tipo_doc: str,         # "CC" | "CE" | ...
-#     numero: str,
-#     fecha_nacimiento,      # str "dd/mm/aa" o "aaaa", o datetime/date
-# ):
-#     fuente = await sync_to_async(lambda: Fuente.objects.filter(nombre=NOMBRE_SITIO).first())()
-#     if not fuente:
-#         await _crear_resultado(consulta_id, None, "Sin Validar",
-#                                f"No existe Fuente con nombre='{NOMBRE_SITIO}'", "", score=0)
-#         return
+async def _delay_humano(min_ms=800, max_ms=2000):
+    await asyncio.sleep(random.uniform(min_ms, max_ms) / 1000)
 
-#     # rutas
-#     folder_rel = os.path.join("resultados", str(consulta_id))
-#     folder_abs = os.path.join(settings.MEDIA_ROOT, folder_rel)
-#     os.makedirs(folder_abs, exist_ok=True)
 
-#     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-#     base = f"skandia_{numero}_{ts}.png"
-#     abs_png = os.path.join(folder_abs, base)
-#     rel_png = os.path.join(folder_rel, base).replace("\\", "/")
+async def _interpretar_skandia(page):
+    texto = (await page.inner_text("body")).upper()
 
-#     browser = context = page = None
+    if "ÉXITO" in texto or "ENVIADA CON ÉXITO" in texto:
+        return ("Solicitud Skandia enviada exitosamente.", 1)
 
-#     # parámetros “rápidos”
-#     SHORT = 900
-#     TINY  = 350
-#     NAV_TIMEOUT = 45_000
-#     MAX_RETRIES = 3           # reintentos totales
-#     CAPTCHA_WAIT = 2_000      # tiempo para decidir si “no hay captcha”
+    if "ERROR" in texto or "FALLÓ" in texto:
+        return ("Solicitud Skandia falló.", 0)
 
-#     # valores a enviar
-#     tipo_val = TIPO_MAP.get((tipo_doc or "").upper(), "C")
-#     year_val = _year_only(fecha_nacimiento)
-#     numero = str(numero or "").strip()
+    return ("Skandia no devolvió respuesta clara.", 0)
 
-#     async def close_overlays(p):
-#         # banner cookies
-#         for sel in [
-#             "button:has-text('Aceptar el uso de cookies')",
-#             "button:has-text('Acepto')",
-#             "button[title*='cookies']",
-#         ]:
-#             try:
-#                 btn = p.locator(sel).first
-#                 if await btn.is_visible(timeout=1200):
-#                     await btn.click()
-#                     await p.wait_for_timeout(TINY)
-#             except Exception:
-#                 pass
-#         # popup marketing “Sí, de una / No, gracias”
-#         for sel in ["button:has-text('No, gracias')", "button:has-text('Cerrar')", "button[aria-label='Cerrar']"]:
-#             try:
-#                 b = p.locator(sel).first
-#                 if await b.is_visible(timeout=800):
-#                     await b.click()
-#                     await p.wait_for_timeout(TINY)
-#             except Exception:
-#                 pass
 
-#     async def safe_fill(p, selector, value: str):
-#         el = p.locator(selector)
-#         await el.wait_for(state="visible", timeout=8_000)
-#         await el.click()
-#         # limpiar robusto
-#         try:
-#             await el.fill("")
-#         except Exception:
-#             pass
-#         await p.keyboard.press("Control+A")
-#         await p.keyboard.press("Delete")
-#         if value:
-#             await el.type(value, delay=20)
-#         await p.wait_for_timeout(80)
+# =========================================================
+# BOT PRINCIPAL
+# =========================================================
+async def consultar_skandia_certificados(
+    consulta_id: int,
+    numero: str,
+    tipo_doc: str,
+    fecha_nacimiento,
+):
+    logger.info(f"[Skandia] Inicio consulta_id={consulta_id}")
 
-#     async def fill_form(p):
-#         # tipo doc
-#         await p.select_option(SEL_TIPO, value=tipo_val)
-#         await p.wait_for_timeout(TINY)
-#         # número
-#         await safe_fill(p, SEL_DOC, numero)
-#         # año (AAAA)
-#         await safe_fill(p, SEL_YEAR, year_val)
-#         # radio "Afiliación" (suele venir marcado, pero aseguramos)
-#         try:
-#             await p.locator("label:has-text('Afiliación')").click(timeout=1000)
-#         except Exception:
-#             pass
-#         # desplazamos un poco para que el captcha quede visible y no lo tape el banner
-#         await p.evaluate("window.scrollBy(0, 300)")
-#         await p.wait_for_timeout(TINY)
+    fuente = await sync_to_async(Fuente.objects.get)(nombre=NOMBRE_SITIO)
+    print(f"[Skandia] Parámetros recibidos: consulta_id={consulta_id}, numero={numero}, tipo_doc={tipo_doc}, fecha_nacimiento={fecha_nacimiento}")
 
-#     try:
-#         async with async_playwright() as pw:
-#             browser = await pw.chromium.launch(headless=HEADLESS)
-#             context = await browser.new_context(
-#                 locale="es-CO", viewport={"width": 1366, "height": 1000}
-#             )
-#             page = await context.new_page()
+    # ---------------- RUTAS ----------------
+    folder = Path(settings.MEDIA_ROOT) / "resultados" / str(consulta_id)
+    folder.mkdir(parents=True, exist_ok=True)
 
-#             mensaje_final = "No se pudo determinar el resultado (revise la evidencia)."
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    img_path = folder / f"skandia_{numero}_{ts}.png"
 
-#             for attempt in range(1, MAX_RETRIES + 1):
-#                 # navegar
-#                 await page.goto(URL, wait_until="domcontentloaded", timeout=NAV_TIMEOUT)
-#                 await page.wait_for_timeout(SHORT)
-#                 await close_overlays(page)
+    tipo_val = TIPO_MAP.get(tipo_doc.upper(), "C")
+    year_val = year_only(fecha_nacimiento)
 
-#                 # llenar siempre (también en recargas)
-#                 await fill_form(page)
+    async with async_playwright() as pw:
+        for intento in range(1, MAX_RETRIES + 1):
+            print(f"[Skandia] Intento {intento}/{MAX_RETRIES}")
 
-#                 # ¿hay captcha visible?
-#                 captcha_visible = False
-#                 try:
-#                     if await page.locator(SEL_CAPTCHA_ANCHOR_IFRAME).first.is_visible(timeout=CAPTCHA_WAIT):
-#                         captcha_visible = True
-#                 except Exception:
-#                     pass
-#                 if not captcha_visible:
-#                     # intento rápido: recargar y volver a escribir
-#                     if attempt < MAX_RETRIES:
-#                         await page.reload(wait_until="domcontentloaded")
-#                         await page.wait_for_timeout(SHORT)
-#                         continue  # siguiente vuelta – reescribe TODO
-#                     # último intento: seguimos sin captcha → enviamos igual (dejará modal de fallo)
-                
-#                 # resolver captcha v2 (checkbox) inyectando token
-#                 try:
-#                     sitekey = await page.get_attribute(SEL_CAPTCHA_CONTAINER, "data-sitekey")
-#                     if not sitekey:
-#                         sitekey = SITEKEY_FALLBACK
-#                     token = await resolver_captcha_v2(page.url, sitekey)
-#                     await page.evaluate(
-#                         """(tok)=>{
-#                             let el = document.getElementById('g-recaptcha-response');
-#                             if(!el){
-#                                 el = document.createElement('textarea');
-#                                 el.id = 'g-recaptcha-response';
-#                                 el.name = 'g-recaptcha-response';
-#                                 el.style.display='none';
-#                                 document.body.appendChild(el);
-#                             }
-#                             el.value = tok;
-#                             el.dispatchEvent(new Event('input',{bubbles:true}));
-#                             el.dispatchEvent(new Event('change',{bubbles:true}));
-#                         }""",
-#                         token
-#                     )
-#                 except Exception:
-#                     # si falla el solver, seguimos para que muestre “Tu solicitud ha fallado”
-#                     pass
+            browser = await pw.chromium.launch(
+                headless=HEADLESS,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--window-size=1920,1080",
+                ],
+            )
 
-#                 # enviar
-#                 try:
-#                     await page.locator(SEL_BTN).click(timeout=8_000)
-#                 except Exception:
-#                     # si se movió el botón, intentar por texto
-#                     try:
-#                         await page.locator("button:has-text('ENVIAR CORREO ELECTRÓNICO')").click(timeout=6_000)
-#                     except Exception:
-#                         pass
+            context = await browser.new_context(
+                locale="es-CO",
+                viewport={"width": 1920, "height": 1080},
+            )
 
-#                 # espera corta a que aparezca modal
-#                 await page.wait_for_timeout(1400)
+            page = await context.new_page()
 
-#                 # evaluar 3 estados
-#                 if await page.locator(SEL_H3_SUCCESS).first.count():
-#                     mensaje_final = "Tu solicitud ha sido enviada con éxito"
-#                     break
-#                 if await page.locator(SEL_H3_FAIL).first.count():
-#                     mensaje_final = "Tu solicitud ha fallado"
-#                     # si falló por captcha en 1er/2do intento, recarga y reintenta rápido
-#                     if attempt < MAX_RETRIES:
-#                         await page.reload(wait_until="domcontentloaded")
-#                         await page.wait_for_timeout(SHORT)
-#                         continue
-#                     break
+            try:
+                # ---------------- NAVEGACIÓN ----------------
+                await page.goto(URL, wait_until="domcontentloaded", timeout=45000)
+                await _delay_humano()
 
-#                 # si no hay ni éxito ni falla explícita y quedan intentos, reintenta rápido
-#                 if attempt < MAX_RETRIES:
-#                     await page.reload(wait_until="domcontentloaded")
-#                     await page.wait_for_timeout(SHORT)
-#                     continue
+                # ---------------- FORMULARIO ----------------
+                await page.wait_for_selector(SEL_TIPO, timeout=20000)
+                await page.select_option(SEL_TIPO, tipo_val)
+                await _delay_humano()
 
-#             # evidencia
-#             await page.wait_for_timeout(400)
-#             await page.screenshot(path=abs_png, full_page=True)
+                await page.fill(SEL_DOC, numero)
+                await _delay_humano()
 
-#             await context.close()
-#             await browser.close()
-#             context = browser = None
+                if year_val:
+                    await page.fill(SEL_YEAR, year_val)
+                    await _delay_humano()
 
-#         await _crear_resultado(consulta_id, fuente, "Validada", mensaje_final, rel_png, score=1)
+                # ---------------- CAPTCHA (SI EXISTE) ----------------
+                try:
+                    sitekey = await page.get_attribute(SEL_CAPTCHA_CONTAINER, "data-sitekey")
+                    sitekey = sitekey or SITEKEY_FALLBACK
 
-#     except Exception as e:
-#         try:
-#             if page:
-#                 try:
-#                     await page.screenshot(path=abs_png, full_page=True)
-#                 except Exception:
-#                     pass
-#         except Exception:
-#             pass
-#         try:
-#             if context:
-#                 await context.close()
-#         except Exception:
-#             pass
-#         try:
-#             if browser:
-#                 await browser.close()
-#         except Exception:
-#             pass
+                    token = await resolver_captcha_v2(sitekey, page.url)
+                    await page.evaluate(
+                        """(token)=>{
+                            document.getElementById('g-recaptcha-response').innerHTML = token;
+                        }""",
+                        token,
+                    )
+                    await _delay_humano()
+                except Exception:
+                    pass  # no siempre hay captcha
 
-#         await _crear_resultado(
-#             consulta_id, fuente, "Sin Validar", f"{type(e).__name__}: {e}",
-#             rel_png if os.path.exists(abs_png) else "", score=0
-#         )
+                # ---------------- ENVIAR ----------------
+                await page.wait_for_selector(SEL_BTN, timeout=20000)
+                await _delay_humano()
+                await page.click(SEL_BTN)
+
+                # ---------------- ESPERAR RESPUESTA ----------------
+                await page.wait_for_selector(
+                    f"{SEL_H3_SUCCESS}, {SEL_H3_FAIL}",
+                    timeout=45000,
+                )
+
+                await _delay_humano(1500, 2500)
+
+                # ---------------- SCREENSHOT FINAL ----------------
+                await page.screenshot(path=str(img_path), full_page=True)
+
+                # ---------------- INTERPRETAR ----------------
+                mensaje, score = await _interpretar_skandia(page)
+                print(f"[Skandia] Mensaje interpretado: {mensaje}, score: {score}")
+                # ---------------- BD ----------------
+                await sync_to_async(Resultado.objects.create)(
+                    consulta_id=consulta_id,
+                    fuente=fuente,
+                    mensaje=mensaje,
+                    score=score,
+                    archivo=str(img_path.relative_to(settings.MEDIA_ROOT)),
+                    estado="validado" if score == 1 else "error"
+                )
+                print(f"[Skandia] Resultado guardado en BD para consulta_id={consulta_id}")
+                await context.close()
+                await browser.close()
+                return mensaje
+
+            except Exception as e:
+                print(f"[Skandia] Error intento {intento}: {e}")
+                import traceback
+                traceback.print_exc()
+                try:
+                    await page.screenshot(path=str(img_path), full_page=True)
+                except Exception as ex:
+                    print(f"[Skandia] Error al tomar screenshot: {ex}")
+                await context.close()
+                await browser.close()
+                if intento == MAX_RETRIES:
+                    await sync_to_async(Resultado.objects.create)(
+                        consulta_id=consulta_id,
+                        fuente=fuente,
+                        mensaje=f"Error Skandia: {e}",
+                        score=0,
+                        archivo=str(img_path.relative_to(settings.MEDIA_ROOT)) if img_path.exists() else "",
+                        estado="error"
+                    )
+                    print(f"[Skandia] Resultado de error guardado en BD para consulta_id={consulta_id}")
+                    return f"Error Skandia: {e}"
+                await asyncio.sleep(random.uniform(3, 6))
+        # Alias para compatibilidad con el sistema de bots
+    consultar = consultar_skandia_certificados

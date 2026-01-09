@@ -263,11 +263,25 @@ async def consultar_libreta_militar(consulta_id: int, cedula: str, tipo_doc: str
                 pass
             # ------------------------------------------
 
+
             # Si NO hay error, intentamos ver/descargar el certificado
+
             if score_final == 0:
                 btn_ver = (host or pagina).locator('#ctl00_MainContent_imgBtnSeeCertificate').first
                 try:
-                    if await btn_ver.count() > 0 and await btn_ver.is_enabled():
+                    btn_count = await btn_ver.count()
+                    btn_enabled = False
+                    btn_visible = False
+                    if btn_count > 0:
+                        try:
+                            btn_enabled = await btn_ver.is_enabled()
+                        except Exception:
+                            btn_enabled = False
+                        try:
+                            btn_visible = await btn_ver.is_visible()
+                        except Exception:
+                            btn_visible = False
+                    if btn_count > 0 and btn_enabled and btn_visible:
                         # Primero intentamos descarga directa
                         try:
                             async with pagina.expect_download(timeout=25000) as dl_info:
@@ -301,33 +315,18 @@ async def consultar_libreta_militar(consulta_id: int, cedula: str, tipo_doc: str
                                     await popup.screenshot(path=abs_png, full_page=True)
                                 await popup.close()
                             except Exception:
-                                # Último recurso: capturar el contenedor principal
-                                cont = (host or pagina).locator('div.container-fluid[style*="min-height: 40vh;"]').first
-                                if await cont.count() > 0:
-                                    await cont.screenshot(path=abs_png)
-                                else:
-                                    await pagina.screenshot(path=abs_png, full_page=True)
+                                # Último recurso: pantalla completa
+                                await pagina.screenshot(path=abs_png, full_page=True)
                     else:
-                        # No hay botón de certificado; capturar resultado visible
-                        cont = (host or pagina).locator('div.container-fluid[style*="min-height: 40vh;"]').first
-                        if await cont.count() > 0:
-                            await cont.screenshot(path=abs_png)
-                        else:
-                            await pagina.screenshot(path=abs_png, full_page=True)
+                        # Botón no está visible/habilitado o no existe; pantalla completa
+                        await pagina.screenshot(path=abs_png, full_page=True)
                 except Exception:
-                    # Si algo falla en el flujo del PDF, deja evidencia general
+                    # Si algo falla en el flujo del PDF, pantalla completa
                     await pagina.screenshot(path=abs_png, full_page=True)
 
             else:
-                # Caso NO encontrado: capturamos el error
-                try:
-                    contenedor = (host or pagina).locator("#divErrorMessages").first
-                    if await contenedor.count() > 0:
-                        await contenedor.screenshot(path=abs_png)
-                    else:
-                        await pagina.screenshot(path=abs_png, full_page=True)
-                except Exception:
-                    await pagina.screenshot(path=abs_png, full_page=True)
+                # Caso NO encontrado: siempre pantalla completa
+                await pagina.screenshot(path=abs_png, full_page=True)
 
             # Cerrar navegador
             try:

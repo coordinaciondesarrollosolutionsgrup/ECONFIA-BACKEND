@@ -175,11 +175,18 @@ from.colpensiones_rpm import consultar_colpensiones_rpm
 from.bancoproveedores_quien_consulto import consultar_quien_consulto
 from.procuraduria_generar_certificado import generar_certificado_procuraduria
 from.sideap_comprobante import consultar_sideap_comprobante
+from.skandia_enviar_certificado import consultar_skandia_certificados
+from .colfo_certificado_afiliacion import consultar_colfondos_cert_afiliacion
 nro_bien="123456"
 empresa ="SCS SOLUCIONES GROUP"
 nit = "830512262-1"
 
 def get_bot_configs(consulta_id, datos):
+    if not datos.get('cedula'):
+        return [{
+            'name': 'error',
+            'error': 'La cédula no fue proporcionada o es incorrecta. Por favor verifique e intente nuevamente.'
+        }]
     return [
 
         {
@@ -1052,7 +1059,7 @@ def get_bot_configs(consulta_id, datos):
                 "apellido": datos["apellido"],
             }
         },
-                {
+               {
             'name':"consultar_fuentes",
             'func': consultar_fuentes,
             'kwargs': {
@@ -1522,5 +1529,24 @@ def get_bot_configs(consulta_id, datos):
                 'tipo_doc': datos['tipo_doc']
             }
         },
+        {
+            'name': "skandia_enviar_certificado",
+            'func': consultar_skandia_certificados,
+            'kwargs': {
+                'consulta_id': consulta_id,
+                'numero': datos.get('cedula', ''),
+                'tipo_doc': datos.get('tipo', ''),
+                'fecha_nacimiento': datos.get('año_nacimiento', '') or datos.get('fecha_nacimiento', ''),
+            }
+        },
 
-]
+        {
+            'name': "colfo_certificado_afiliacion",
+            'func': consultar_colfondos_cert_afiliacion,
+            'kwargs': {
+                'consulta_id': consulta_id,
+                'cedula': datos.get('cedula', ''),
+                'tipo_doc': datos.get('tipo_doc', ''),
+            }
+        },
+    ]

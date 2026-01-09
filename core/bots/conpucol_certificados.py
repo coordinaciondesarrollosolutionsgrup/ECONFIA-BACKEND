@@ -24,10 +24,10 @@ SEL_RESULT_HINTS = [
     "table", ".table", "[role='alert']", ".alert", ".grid", ".card", ".container"
 ]
 
-WAIT_AFTER_NAV       = 15000
-WAIT_AFTER_CLICK     = 1500
-SLEEP_AFTER_CONSULTA = 1000   # 1s
-SLEEP_AFTER_VALIDAR  = 3000   # 3s
+WAIT_AFTER_NAV       = 7500
+WAIT_AFTER_CLICK     = 750
+SLEEP_AFTER_CONSULTA = 500    # 0.5s
+SLEEP_AFTER_VALIDAR  = 1500   # 1.5s
 
 
 async def consultar_conpucol_certificados(

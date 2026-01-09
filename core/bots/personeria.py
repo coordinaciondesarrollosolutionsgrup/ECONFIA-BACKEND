@@ -55,7 +55,8 @@ async def _goto_with_retries(page: Page, url: str, folder: str, ts: str, attempt
     last_exc = None
     for i in range(1, attempts + 1):
         try:
-            await page.goto(url, timeout=timeout, wait_until="load")
+            # OPTIMIZACIÓN: avanzar tan pronto el DOM esté listo
+            await page.goto(url, timeout=timeout, wait_until="domcontentloaded")
             return True
         except Exception as e:
             last_exc = e
@@ -229,6 +230,10 @@ async def consultar_personeria(
                 print("[PERSONERIA] Página cargada")
 
                 # llenar formulario principal
+                # OPTIMIZACIÓN: esperar solo los campos necesarios antes de interactuar
+                await page.wait_for_selector("#tipo_documento", timeout=15000)
+                await page.wait_for_selector("#documento", timeout=15000)
+                await page.wait_for_selector("#fecha_expedicion", timeout=15000)
                 try:
                     await page.select_option("#tipo_documento", tipo_doc_value)
                 except Exception as e:

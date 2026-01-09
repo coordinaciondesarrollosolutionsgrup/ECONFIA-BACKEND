@@ -55,7 +55,7 @@ def resolve_callable(bot_str: str):
     raise ImportError(f"No encontré función de consulta en módulo '{module_path}'")
 
 
-async def call_bot(func, consulta_id, cedula, tipo_doc, fecha_expedicion=None, codigo_verificacion=None, nombre=None, apellido=None):
+async def call_bot(func, consulta_id, cedula, tipo_doc, fecha_expedicion=None, codigo_verificacion=None, nombre=None, apellido=None, año_nacimiento=None):
     """
     Llama al bot intentando mapear parámetros por nombre (legacy) o por posición.
     Ahora acepta y propaga fecha_expedicion, codigo_verificacion, nombre y apellido.
@@ -92,6 +92,8 @@ async def call_bot(func, consulta_id, cedula, tipo_doc, fecha_expedicion=None, c
             kwargs[name] = nombre
         elif ln in ('apellido', 'last_name', 'apellido_persona', 'apellidos'):
             kwargs[name] = apellido
+        elif ln in ('año_nacimiento', 'ano_nacimiento', 'anio_nacimiento', 'year_birth', 'birth_year'):
+            kwargs[name] = año_nacimiento
 
     try:
         if kwargs:
@@ -115,6 +117,8 @@ async def call_bot(func, consulta_id, cedula, tipo_doc, fecha_expedicion=None, c
             args.append(nombre)
         if arity >= 7 and apellido is not None:
             args.append(apellido)
+        if arity >= 8 and año_nacimiento is not None:
+            args.append(año_nacimiento)
         return await func(*args)
 
 
@@ -130,6 +134,7 @@ def main():
     parser.add_argument('--headless', choices=['true','false'], help='Override headless')
     parser.add_argument('--slow-mo', type=int, help='Override slow_mo (ms)')
     parser.add_argument('--codigo_verificacion', required=False, help='Código de verificación (si aplica)')
+    parser.add_argument('--año_nacimiento', required=False, help='Año de nacimiento (si aplica)')
     args = parser.parse_args()
 
     # resolver función
@@ -156,7 +161,7 @@ def main():
     if args.slow_mo is not None:
         os.environ[f"{botname_env.upper()}_SLOW_MO"] = str(args.slow_mo)
 
-    # Ejecutar: pasar fecha_expedicion, codigo_verificacion, nombre y apellido a call_bot
+    # Ejecutar: pasar fecha_expedicion, codigo_verificacion, nombre, apellido y año_nacimiento a call_bot
     try:
         asyncio.run(call_bot(
             func,
@@ -166,7 +171,8 @@ def main():
             fecha_expedicion=args.fecha_expedicion,
             codigo_verificacion=args.codigo_verificacion,
             nombre=args.nombre,
-            apellido=args.apellido
+            apellido=args.apellido,
+            año_nacimiento=args.año_nacimiento
         ))
         print('Ejecución finalizada')
     except Exception as e:

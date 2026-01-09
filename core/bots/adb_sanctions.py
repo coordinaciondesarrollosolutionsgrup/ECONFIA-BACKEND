@@ -10,7 +10,7 @@ from core.models import Resultado, Fuente
 
 NOMBRE_SITIO = "opensanctions_adb"  # pon este mismo nombre en tu tabla Fuente
 URL_SEARCH = "https://www.opensanctions.org/search/?scope=adb_sanctions&q={q}"
-GOTO_TIMEOUT_MS = 180_000
+GOTO_TIMEOUT_MS = 90_000
 
 # Selectores (con clases ofuscadas, usamos "starts-with" / "contains" robustos)
 SEL_ALERT_NORES = "div.alert-heading.h4"  # <div class="alert-heading h4">No matching entities were found.</div>
@@ -31,6 +31,8 @@ def _norm(s: str) -> str:
 
 async def consultar_opensanctions_adb(consulta_id: int, nombre: str, apellido: str):
     navegador = None
+    context = None
+    page = None
     full_name = f"{(nombre or '').strip()} {(apellido or '').strip()}".strip()
 
     # 1) Fuente
@@ -78,74 +80,88 @@ async def consultar_opensanctions_adb(consulta_id: int, nombre: str, apellido: s
                 headless=True,
                 args=["--disable-blink-features=AutomationControlled"]
             )
-            context = await navegador.new_context(
-                viewport={"width": 1400, "height": 900},
-                locale="en-US",
-                timezone_id="America/Bogota",
-            )
-            page = await context.new_page()
-
-            # 3) Ir a la URL de búsqueda (scope=adb_sanctions)
-            q = urllib.parse.quote_plus(full_name)
-            search_url = URL_SEARCH.format(q=q)
-            await page.goto(search_url, timeout=GOTO_TIMEOUT_MS)
-            await page.wait_for_load_state("domcontentloaded", timeout=60_000)
             try:
-                await page.wait_for_load_state("networkidle", timeout=30_000)
-            except Exception:
-                pass
-
-            # 4) ¿Mensaje "No matching entities were found."?
-            nores = page.locator(SEL_ALERT_NORES, has_text="No matching entities were found.")
-            if await nores.count() > 0 and await nores.first.is_visible():
+                context = await navegador.new_context(
+                    viewport={"width": 1400, "height": 900},
+                    locale="en-US",
+                    timezone_id="America/Bogota",
+                )
                 try:
-                    mensaje_final = (await nores.first.inner_text()).strip()
-                except Exception:
-                    mensaje_final = "No matching entities were found."
-                try:
-                    await page.screenshot(path=absolute_png, full_page=True)
-                except Exception:
-                    pass
-                success = True  # consulta válida, sin hallazgos (score=1)
-
-            else:
-                # 5) Hay lista de resultados: iterar títulos
-                items = page.locator(f"{SEL_LIST} {SEL_ITEM}")
-                n = await items.count()
-                exact_hit = False
-
-                for i in range(n):
-                    item = items.nth(i)
+                    page = await context.new_page()
                     try:
-                        title = (await item.locator(SEL_TITLE_A).first.inner_text(timeout=3_000)).strip()
+                        # 3) Ir a la URL de búsqueda (scope=adb_sanctions)
+                        q = urllib.parse.quote_plus(full_name)
+                        search_url = URL_SEARCH.format(q=q)
+                        await page.goto(search_url, timeout=GOTO_TIMEOUT_MS)
+                        await page.wait_for_load_state("domcontentloaded", timeout=30_000)
+                        try:
+                            await page.wait_for_load_state("networkidle", timeout=15_000)
+                        except Exception:
+                            pass
+
+                        # 4) ¿Mensaje "No matching entities were found."?
+                        nores = page.locator(SEL_ALERT_NORES, has_text="No matching entities were found.")
+                        if await nores.count() > 0 and await nores.first.is_visible():
+                            try:
+                                mensaje_final = (await nores.first.inner_text()).strip()
+                            except Exception:
+                                mensaje_final = "No matching entities were found."
+                            try:
+                                await page.screenshot(path=absolute_png, full_page=True)
+                            except Exception:
+                                pass
+                            success = True  # consulta válida, sin hallazgos (score=1)
+
+                        else:
+                            # 5) Hay lista de resultados: iterar títulos
+                            items = page.locator(f"{SEL_LIST} {SEL_ITEM}")
+                            n = await items.count()
+                            exact_hit = False
+
+                            for i in range(n):
+                                item = items.nth(i)
+                                try:
+                                    title = (await item.locator(SEL_TITLE_A).first.inner_text(timeout=1_500)).strip()
+                                except Exception:
+                                    title = ""
+
+                                if title:
+                                    if _norm(title) == norm_query:
+                                        exact_hit = True
+                                        break
+
+                            if exact_hit:
+                                score_final = 5
+                                mensaje_final = f"Coincidencia exacta con el nombre buscado: '{full_name}'."
+                            else:
+                                score_final = 1
+                                mensaje_final = "Se encontraron resultados, pero sin coincidencia exacta del nombre."
+
+                            try:
+                                await page.screenshot(path=absolute_png, full_page=True)
+                            except Exception:
+                                pass
+
+                            success = True
+                    finally:
+                        if page is not None:
+                            try:
+                                await page.close()
+                            except Exception:
+                                pass
+                finally:
+                    if context is not None:
+                        try:
+                            await context.close()
+                        except Exception:
+                            pass
+            finally:
+                if navegador is not None:
+                    try:
+                        await navegador.close()
                     except Exception:
-                        title = ""
-
-                    if title:
-                        if _norm(title) == norm_query:
-                            exact_hit = True
-                            break
-
-                if exact_hit:
-                    score_final = 5
-                    mensaje_final = f"Coincidencia exacta con el nombre buscado: '{full_name}'."
-                else:
-                    score_final = 1
-                    mensaje_final = "Se encontraron resultados, pero sin coincidencia exacta del nombre."
-
-                try:
-                    await page.screenshot(path=absolute_png, full_page=True)
-                except Exception:
-                    pass
-
-                success = True
-
-            # 6) Cerrar navegador
-            try:
-                await navegador.close()
-            except Exception:
-                pass
-            navegador = None
+                        pass
+                navegador = None
 
         # 7) Guardar resultado
         if success:
@@ -172,6 +188,16 @@ async def consultar_opensanctions_adb(consulta_id: int, nombre: str, apellido: s
                 mensaje=str(e), archivo=""
             )
         finally:
+            try:
+                if page is not None:
+                    await page.close()
+            except Exception:
+                pass
+            try:
+                if context is not None:
+                    await context.close()
+            except Exception:
+                pass
             try:
                 if navegador is not None:
                     await navegador.close()

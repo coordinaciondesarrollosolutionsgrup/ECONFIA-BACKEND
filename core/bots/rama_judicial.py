@@ -21,6 +21,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 
+
+from typing import Optional
 from core.models import Resultado, Fuente
 
 URL = "https://consultaprocesos.ramajudicial.gov.co/Procesos/NombreRazonSocial"
@@ -77,7 +79,7 @@ def _pdf_to_png_list(pdf_path: str, out_dir: str, base: str, zoom: float = 2.8) 
         pass
     return pngs
 
-def _merge_pngs_vertical(png_paths: list[str], out_path: str, pad: int = 8, bg=(255, 255, 255)) -> str | None:
+def _merge_pngs_vertical(png_paths: list[str], out_path: str, pad: int = 8, bg=(255, 255, 255)) -> Optional[str]:
     """(Sigue disponible) Une imágenes verticalmente. No se usa por defecto."""
     try:
         from PIL import Image
@@ -110,7 +112,7 @@ def _merge_pngs_vertical(png_paths: list[str], out_path: str, pad: int = 8, bg=(
         except: pass
     return out_path
 
-def _merge_pngs_grid(png_paths: list[str], out_path: str, cols: int = 2, pad: int = 8, bg=(255, 255, 255)) -> str | None:
+def _merge_pngs_grid(png_paths: list[str], out_path: str, cols: int = 2, pad: int = 8, bg=(255, 255, 255)) -> Optional[str]:
     """
     Une varias imágenes en una grilla (cols por fila), manteniendo proporcionalidad.
     Por defecto 2 columnas (dos arriba, dos abajo, ...).

@@ -184,7 +184,7 @@ FUENTES_BOTS = [
     "afdb",
     "adres_transito",
     "adres",
-    "adb_sanctions"
+    "adb_sanctions",
         # --- Agregados contratistas/jurídicos ---
         "rama_abogado_certificado",
         "porvenir_cert_afiliacion",

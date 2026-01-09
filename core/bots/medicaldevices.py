@@ -193,7 +193,23 @@ async def consultar_medical_devices(consulta_id: int, nombre_empresa: str, headl
                     except Exception:
                         pass
 
-                    navegador = await p.chromium.launch(headless=False, args=["--window-position=2000,0"])
+                    navegador = await p.chromium.launch(headless=True, 
+                        args=[                    
+                            "--disable-blink-features=AutomationControlled",
+                            "--disable-dev-shm-usage",
+                            "--disable-infobars",
+                            "--no-sandbox",
+                            "--disable-web-security",
+                            "--disable-features=IsolateOrigins,site-per-process",
+                            "--disable-component-update",
+                            "--disable-sync",
+                            "--disable-extensions",
+                            "--disable-default-apps",
+                            "--disable-preconnect",
+                            "--no-first-run",
+                            "--no-default-browser-check",
+                            "--window-size=1400,900",
+                            "--window-position=2000,0",])
                     context = await navegador.new_context(
                         viewport={"width": 1366, "height": 768},
                         user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

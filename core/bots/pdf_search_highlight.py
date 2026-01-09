@@ -1,6 +1,6 @@
 # core/bots/pdf_search_highlight.py
 import os
-from typing import Optional
+from typing import Optional, List
 import re
 import unicodedata
 from datetime import datetime
@@ -27,8 +27,8 @@ def _buscar_en_pdf_y_resaltar_core(
     export_first_if_none: bool = True,
     dpi: int = 150,
     stop_on_first: bool = False,   # corta en la primera página con match
-    page_limit: int | None = None  # limitar páginas para pruebas / performance
-    page_limit: Optional[int] = None  # limitar páginas para pruebas / performance
+    page_limit: Optional[int] = None,  # limitar páginas para pruebas / performanc
+  ):
     """
     IMPLEMENTACIÓN ORIGINAL (sin cambios de lógica):
     Busca 'query' en pdf_path de forma tolerante (sin acentos, case-insensitive y
@@ -133,7 +133,6 @@ def consultar_buscar_en_pdf_y_resaltar_dj(
     export_first_if_none: bool = True,
     dpi: int = 150,
     page_limit: Optional[int] = None,
-    page_limit: int | None = None,
 ):
     """
     Wrapper estilo plantilla (nombre con 'consultar'):
@@ -152,7 +151,6 @@ def consultar_buscar_en_pdf_y_resaltar_dj(
             out_folder=absolute_folder,
             export_first_if_none=export_first_if_none,
             dpi=dpi,
-            page_limit=page_limit,
             page_limit=page_limit,
         )
 
@@ -193,7 +191,6 @@ def consultar_buscar_en_pdf_y_resaltar(
     export_first_if_none: bool = True,
     dpi: int = 150,
     page_limit: Optional[int] = None,
-    page_limit: int | None = None,
 ):
     """
     Versión “cruda” con nombre 'consultar*' para uso directo.
@@ -205,7 +202,6 @@ def consultar_buscar_en_pdf_y_resaltar(
         out_folder=out_folder,
         export_first_if_none=export_first_if_none,
         dpi=dpi,
-        page_limit=page_limit,
         page_limit=page_limit,
     )
 
@@ -221,7 +217,6 @@ def buscar_en_pdf_y_resaltar_dj(
     page_limit: Optional[int] = None,
     dpi: int = 150,
     stop_on_first: bool = False,
-    page_limit: int | None = None,
 ):
     """Alias legacy que llama al nuevo nombre con 'consultar'."""
     return consultar_buscar_en_pdf_y_resaltar_dj(
@@ -231,7 +226,6 @@ def buscar_en_pdf_y_resaltar_dj(
         page_limit=page_limit,
         dpi=dpi,
         stop_on_first=stop_on_first,
-        page_limit=page_limit,
     )
 
 
@@ -242,7 +236,6 @@ def buscar_en_pdf_y_resaltar(
     page_limit: Optional[int] = None,
     dpi: int = 150,
     stop_on_first: bool = False,
-    page_limit: int | None = None,
 ):
     """Alias legacy que llama al nuevo nombre con 'consultar'."""
     return consultar_buscar_en_pdf_y_resaltar(
@@ -252,5 +245,4 @@ def buscar_en_pdf_y_resaltar(
         page_limit=page_limit,
         dpi=dpi,
         stop_on_first=stop_on_first,
-        page_limit=page_limit,
     )

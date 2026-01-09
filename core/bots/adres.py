@@ -3,6 +3,8 @@ from datetime import datetime
 from playwright.async_api import async_playwright
 from django.conf import settings
 from asgiref.sync import sync_to_async
+import fitz  # PyMuPDF
+import os
 import traceback
 
 from core.models import Consulta, Resultado, Fuente
@@ -283,8 +285,9 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
             if pagina_resultado is None:
                 pagina_resultado = pagina
 
+
             # =================================================================
-            #                      PDF + SCREENSHOT
+            #                      PDF + IMAGEN (fitz)
             # =================================================================
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             base_name = f"{nombre_sitio}_{cedula}_{timestamp}"
@@ -295,24 +298,40 @@ async def consultar_adres(consulta_id: int, cedula: str, tipo_doc: str):
 
             # Opcional: evitar generar artefactos pesados en pipelines (setear DISABLE_ARTIFACTS=true)
             disable_artifacts = os.environ.get('DISABLE_ARTIFACTS', '').lower() in ['1','true','yes']
+            pdf_generado = False
             if not disable_artifacts:
                 try:
                     await pagina_resultado.pdf(path=pdf_path, format="Letter")
+                    pdf_generado = True
                 except:
-                    pass
+                    pdf_generado = False
 
-            try:
-                # tomar screenshot más ligera cuando se pida (full_page puede ser lento)
-                full_page_flag = not os.environ.get('DISABLE_SCREENSHOT_FULLPAGE', '').lower() in ['1','true','yes']
-                if full_page_flag:
-                    await pagina_resultado.screenshot(path=img_path, full_page=True)
-                else:
-                    await pagina_resultado.screenshot(path=img_path, full_page=False)
-            except:
+            # Si el PDF se generó, convertirlo a imagen usando fitz
+            imagen_generada = False
+            if pdf_generado and os.path.exists(pdf_path):
                 try:
-                    await pagina_resultado.screenshot(path=img_path)
+                    doc = fitz.open(pdf_path)
+                    page = doc.load_page(0)
+                    pix = page.get_pixmap(dpi=150)
+                    pix.save(img_path)
+                    doc.close()
+                    imagen_generada = True
+                except Exception as e:
+                    imagen_generada = False
+
+            # Si no se pudo generar la imagen desde el PDF, usar screenshot como fallback
+            if not imagen_generada:
+                try:
+                    full_page_flag = not os.environ.get('DISABLE_SCREENSHOT_FULLPAGE', '').lower() in ['1','true','yes']
+                    if full_page_flag:
+                        await pagina_resultado.screenshot(path=img_path, full_page=True)
+                    else:
+                        await pagina_resultado.screenshot(path=img_path, full_page=False)
                 except:
-                    pass
+                    try:
+                        await pagina_resultado.screenshot(path=img_path)
+                    except:
+                        pass
 
             # =================================================================
             #                    EXTRAER MENSAJE Y GUARDAR BD

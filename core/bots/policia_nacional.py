@@ -22,7 +22,8 @@ OVERLAYS  = [".ui-widget-overlay", ".ui-blockui", ".blockUI", ".ui-overlay-visib
 
 # ====================== Helpers de parsing/score ======================
 
-def _extraer_frase_clave(html: str) -> str | None:
+from typing import Optional
+def _extraer_frase_clave(html: str) -> Optional[str]:
     """ Devuelve la <b>...</b> más útil (preferencia a 'TIENE'/'NO TIENE'). """
     if not html:
         return None

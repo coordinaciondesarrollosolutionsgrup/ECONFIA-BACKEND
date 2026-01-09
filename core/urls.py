@@ -1,6 +1,7 @@
 # core/urls.py
 from django.urls import path
 from . import views
+from .import views_admin
 
 urlpatterns = [
     path('api/consultar/', views.api_consultar),
@@ -34,7 +35,8 @@ urlpatterns = [
 
     path("api/estado-3d/<int:consulta_id>/", views.generar_grafico_3d),
     path("api/cilindros-3d/<int:consulta_id>/", views.generar_grafico_cilindros),
-    
-    
-    path("api/test-email/", views.test_email)
+
+    path("api/test-email/", views.test_email),
+    path("api/test_pdf_consolidado/", views.test_pdf_consolidado, name="test_pdf_consolidado"),
+   
 ]

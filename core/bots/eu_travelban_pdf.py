@@ -3,7 +3,7 @@ import os
 import re
 from urllib.parse import urlparse
 from datetime import datetime
-
+from typing import Optional
 from django.conf import settings
 from asgiref.sync import sync_to_async
 from playwright.async_api import async_playwright
@@ -15,10 +15,10 @@ URL = "https://www.sanctionsmap.eu/#/main/travel/ban"
 NOMBRE_SITIO = "eu_travelbans_pdf"
 
 
-def _content_disposition_filename(cd: str) -> str | None:
+def _content_disposition_filename(cd: str) -> Optional[str]:
     if not cd:
         return None
-    m = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^\";]+)"?', cd, flags=re.IGNORECASE)
+    m = re.search(r'filename\*?=(?:UTF-8\'\'\)?"?([^\";]+)"?', cd, flags=re.IGNORECASE)
     return m.group(1) if m else None
 
 

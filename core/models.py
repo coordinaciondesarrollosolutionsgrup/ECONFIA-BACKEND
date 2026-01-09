@@ -50,6 +50,7 @@ class Resultado(models.Model):
     estado = models.CharField(max_length=20, default="pendiente")
     mensaje = models.TextField(blank=True)
     archivo = models.CharField(max_length=255, blank=True)
+    intentos = models.IntegerField(default=0)
 
     def save(self, *args, **kwargs):
         # estado siempre en minúscula
@@ -133,6 +134,7 @@ class Consolidado(models.Model):
         return f"Consolidado {self.tipo.nombre if self.tipo else 'Desconocido'} - {self.consulta.candidato.cedula}"
 
 
+
 class Candidato(models.Model):
     cedula = models.CharField(max_length=20, primary_key=True)
     tipo_doc = models.CharField(max_length=10, null=True, blank=True)
@@ -142,10 +144,17 @@ class Candidato(models.Model):
     fecha_expedicion = models.DateField(null=True, blank=True)
     tipo_persona = models.CharField(max_length=50, null=True, blank=True)
     sexo = models.CharField(max_length=10, null=True, blank=True)
-
-    # Nuevos campos
     email = models.EmailField(max_length=150, null=True, blank=True)
+    # El campo profesion se mantiene para compatibilidad, pero se recomienda usar CandidatoProfesion
     profesion = models.CharField(max_length=100, null=True, blank=True)
 
-def __str__(self):
-    return f"{self.nombre} {self.apellido} ({self.cedula})"
+    def __str__(self):
+        return f"{self.nombre} {self.apellido} ({self.cedula})"
+
+class CandidatoProfesion(models.Model):
+    candidato = models.ForeignKey(Candidato, on_delete=models.CASCADE, related_name="profesiones")
+    nombre = models.CharField(max_length=100)
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.candidato.cedula} - {self.nombre}"
